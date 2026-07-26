@@ -47,6 +47,9 @@
   --util-3:          #2a78d6;
   --util-4:          #1c5cab;
   --util-5:          #0d366b;
+  --sev-watch:       #86b6ef;
+  --sev-serious:     #2a78d6;
+  --sev-critical:    #0d366b;
 
   /* status — fixed in both modes, never themed, never a series colour */
   --status-good:     #0ca30c;
@@ -84,6 +87,9 @@
     --util-3:         #5598e7;
     --util-4:         #86b6ef;
     --util-5:         #cde2fb;
+    --sev-watch:      #184f95;
+    --sev-serious:    #5598e7;
+    --sev-critical:   #cde2fb;
     --success-text:   #0ca30c;
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
   }
@@ -114,6 +120,9 @@
   --util-3:         #5598e7;
   --util-4:         #86b6ef;
   --util-5:         #cde2fb;
+  --sev-watch:      #184f95;
+  --sev-serious:    #5598e7;
+  --sev-critical:   #cde2fb;
   --success-text:   #0ca30c;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
@@ -383,9 +392,25 @@ tr.detail > td { padding: 0 0 14px; white-space: normal; }
 .qrow .qmeta { font-size: 11.5px; color: var(--text-muted); grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 4px 14px; }
 .qrow .qmeta .cite { font-variant-numeric: tabular-nums; }
 .qrow .qval { font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+.qrow .qmeta .overdue { color: var(--status-critical); font-weight: 600; }
+.qrow .qact {
+  grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin-top: 4px;
+}
+.qrow .qact > .muted { font-size: 11.5px; }
+.qrow .qact select {
+  font: inherit; font-size: 12px; color: var(--text-primary);
+  background: var(--surface-1); border: 1px solid var(--border-strong);
+  border-radius: 6px; padding: 3px 7px; cursor: pointer;
+}
+.btn-sm { font-size: 12px; padding: 3px 9px; }
+.hero-note {
+  flex: 1 1 100%; font-size: 12.5px; color: var(--text-secondary);
+  border-top: 1px solid var(--grid); padding-top: 12px; margin-top: 2px;
+}
 @media (max-width: 640px) {
   .qrow { grid-template-columns: minmax(0, 1fr); }
-  .qrow .qwhy, .qrow .qmeta { grid-column: 1; }
+  .qrow .qwhy, .qrow .qmeta, .qrow .qact { grid-column: 1; }
   .qrow .qval { text-align: left; }
 }
 .qrow .drill {
@@ -457,6 +482,7 @@ tr.row-focus > td {
     --series-1: #2a78d6; --series-2: #eb6834; --de-emphasis: #898781;
     --ord-1: #86b6ef; --ord-2: #5598e7; --ord-3: #256abf; --ord-4: #0d366b;
     --util-1: #86b6ef; --util-2: #5598e7; --util-3: #2a78d6; --util-4: #1c5cab; --util-5: #0d366b;
+    --sev-watch: #86b6ef; --sev-serious: #2a78d6; --sev-critical: #0d366b;
     --success-text: #006300; --shadow: none;
   }
   @page { margin: 14mm; }
@@ -467,7 +493,7 @@ tr.row-focus > td {
 
   /* Controls do nothing on paper. */
   #theme-toggle, .tabs, .filters, .viewtoggle, .queue-more button,
-  .sortbtn .arrow, #tip { display: none !important; }
+  .qrow .qact, .sortbtn .arrow, #tip { display: none !important; }
   .printonly { display: block; font-size: 9.5pt; color: var(--text-secondary); margin-top: 10px; }
 
   /* Never split a record across a page. */
@@ -568,6 +594,12 @@ const POLICY = {
   ADJUDICATION_NORMAL_DAYS: 60,        // expected licensing decision window
   TURNAROUND_TRAILING_DAYS: 90,        // window for the median turnaround measure
 };
+
+/* How long an action may sit after the condition arose before it is overdue.
+   Applied from the date the condition actually became true — not the date it
+   was noticed — so a finding cannot be made to look fresh by discovering it
+   late. */
+const ACTION_SLA_DAYS = { critical: 5, serious: 30, watch: 90 };
 
 /* ============================================================================
    UTILITIES
@@ -939,14 +971,22 @@ const DATA = (function buildMockData() {
        evenly: most authorizations are worked properly and a minority have
        nobody closing the loop at all, which is what makes a three-or-more
        finding a different problem from a one-or-two finding. */
-    const ackRate = chance(0.12) ? 0.35 : 0.95;
+    const ackDiscipline = chance(0.12) ? 0.35 : 0.95;
+    const yearsSinceIssue = issuedOn ? daysBetween(issuedOn, asOf) / 365 : 0;
     const provisoCount = status === 'Issued'
       ? (k.kind === 'TAA' || k.kind === 'MLA' || k.kind === 'WDA' ? int(3, 8) : int(0, 5))
       : 0;
     const provisos = sample(PROVISO_TEXTS, Math.min(provisoCount, PROVISO_TEXTS.length)).map((text, idx) => ({
       ref: `${idx + 1}`,
       text,
-      acknowledgedOn: chance(ackRate) ? addDays(issuedOn || submittedOn, int(2, 90)) : null,
+      /* Acknowledgement gaps close over time: an authorization issued years ago
+         has been through internal review and at least one audit cycle, so the
+         open provisos concentrate on recent issuances. Without this decay the
+         data implies conditions left unacknowledged for a decade, and every
+         action in the queue reads as years overdue — which makes "overdue"
+         mean nothing at all. */
+      acknowledgedOn: chance(1 - (1 - ackDiscipline) * Math.exp(-yearsSinceIssue / 1.6))
+        ? addDays(issuedOn || submittedOn, int(2, 90)) : null,
     }));
 
     /* Shipments realise a target utilization *over the authorization's whole
@@ -1054,6 +1094,20 @@ const knownParts = (parts, at) => parts.filter((p) => p.addedOn <= at);
 const determinedParts = (parts, at) => parts.filter((p) => p.determinedOn !== null && p.determinedOn <= at);
 const undeterminedParts = (parts, at) => knownParts(parts, at).filter((p) => p.determinedOn === null || p.determinedOn > at);
 
+/** The date cumulative shipped value first crossed a fraction of the
+    authorized value — read off the shipment history rather than assumed, so
+    the amendment clock starts when the value actually went, not when someone
+    happened to look. */
+function crossedOn(a, fraction) {
+  const target = a.authorizedValueUsd * fraction;
+  let acc = 0;
+  for (const s of a.shipments) {
+    acc += s.valueUsd;
+    if (acc >= target) return s.date;
+  }
+  return null;
+}
+
 /** Median days from submission to issuance over the trailing window. */
 function turnaroundMedian(auths, at, regime) {
   const from = addDays(at, -POLICY.TURNAROUND_TRAILING_DAYS);
@@ -1130,7 +1184,7 @@ const RULES = [
           why: `Items exported under a temporary authorization are still abroad ${overdue} days after it expired, with no record of their return. Until they are reconciled as returned or covered by a new authorization, they are abroad without one.`,
           value: `${fmtInt(overdue)} days`, valueLabel: 'past expiry',
           meta: [a.kindLabel, a.program, a.destinations.join(', '), `Expired ${fmtDate(a.expiresOn)}`],
-          owner: a.analyst, cite: '22 CFR 123.5', rank: overdue, view: 'auth', focus: a.id,
+          owner: a.analyst, onsetOn: a.expiresOn, cite: '22 CFR 123.5', view: 'auth', focus: a.id,
         };
       }),
   },
@@ -1147,7 +1201,7 @@ const RULES = [
         why: `${late.length === 1 ? 'A shipment was' : `${late.length} shipments were`} recorded against this authorization after it expired, the last one ${daysBetween(a.expiresOn, late[late.length - 1].date)} days past the expiration date. Assess against the voluntary disclosure decision.`,
         value: fmtUsd(sum(late.map((sh) => sh.valueUsd))), valueLabel: 'shipped after expiry',
         meta: [a.kindLabel, a.program, a.destinations.join(', '), `Expired ${fmtDate(a.expiresOn)}`],
-        owner: a.analyst, cite: '22 CFR 127.12', rank: sum(late.map((sh) => sh.valueUsd)), view: 'auth', focus: a.id,
+        owner: a.analyst, onsetOn: late[0].date, cite: '22 CFR 127.12', view: 'auth', focus: a.id,
       })),
   },
   {
@@ -1162,7 +1216,7 @@ const RULES = [
         why: `${fmtUsd(a.authorizedValueUsd - shippedBy(a, at))} of authorized value remains against ${Math.round(rem / 30.4)} months of remaining term. The value will be exhausted long before the authorization expires, and an amendment takes longer to obtain than the remaining balance will cover.`,
         value: fmtPct(u), valueLabel: 'consumed',
         meta: [a.kindLabel, a.program, `${fmtUsd(a.authorizedValueUsd)} authorized`, `Expires ${fmtDate(a.expiresOn)}`],
-        owner: a.analyst, cite: 'Policy: amendment at ' + fmtPct(POLICY.UTILIZATION_THRESHOLD), rank: u, view: 'auth', focus: a.id,
+        owner: a.analyst, onsetOn: crossedOn(a, POLICY.UTILIZATION_THRESHOLD) || a.issuedOn, cite: 'Policy: amendment at ' + fmtPct(POLICY.UTILIZATION_THRESHOLD), view: 'auth', focus: a.id,
       })),
   },
   {
@@ -1177,7 +1231,7 @@ const RULES = [
         why: `${open.length} of ${a.provisos.length} provisos on this live authorization have no acknowledgement date recorded. Unacknowledged provisos are the most common finding in a licensing audit, and the conditions bind whether or not anyone has read them.`,
         value: `${open.length}`, valueLabel: `of ${a.provisos.length} provisos`,
         meta: [a.kindLabel, a.program, `Issued ${fmtDate(a.issuedOn)}`],
-        owner: a.analyst, cite: '22 CFR 127.1', rank: open.length, view: 'auth', focus: a.id,
+        owner: a.analyst, onsetOn: a.issuedOn, cite: '22 CFR 127.1', view: 'auth', focus: a.id,
       })),
   },
   {
@@ -1191,7 +1245,7 @@ const RULES = [
         why: `No supporting record set is retained for this authorization. Five-year retention applies from the date of the transaction, and the records are what an audit examines first — their absence is a finding on its own, independent of whether the exports were properly authorized.`,
         value: a.expiresOn > at ? 'Live' : 'Expired', valueLabel: a.expiresOn > at ? `expires ${fmtDate(a.expiresOn)}` : fmtDate(a.expiresOn),
         meta: [a.kindLabel, a.program, `${a.shipments.length} shipments recorded`],
-        owner: a.analyst, cite: a.regime === 'ITAR' ? '22 CFR 122.5' : '15 CFR 762', rank: shippedValue(a), view: 'auth', focus: a.id,
+        owner: a.analyst, onsetOn: a.issuedOn, cite: a.regime === 'ITAR' ? '22 CFR 122.5' : '15 CFR 762', view: 'auth', focus: a.id,
       })),
   },
   {
@@ -1206,7 +1260,7 @@ const RULES = [
         why: `This part has been in the item master ${age} days with no jurisdiction and classification determination of record. Until it has one it cannot be quoted for export, shipped, or disclosed to a foreign national, and any movement of it is unassessed.`,
         value: `${age} days`, valueLabel: 'in queue',
         meta: [p.nomenclature, p.program, `Added ${fmtDate(p.addedOn)}`],
-        owner: p.analyst, cite: `Policy: ${POLICY.CLASSIFICATION_SLA_DAYS}-day service level`, rank: age, view: 'class', focus: p.partNumber,
+        owner: p.analyst, onsetOn: addDays(p.addedOn, POLICY.CLASSIFICATION_SLA_DAYS), cite: `Policy: ${POLICY.CLASSIFICATION_SLA_DAYS}-day service level`, view: 'class', focus: p.partNumber,
       })),
   },
   {
@@ -1220,7 +1274,7 @@ const RULES = [
         why: `This part is controlled on the U.S. Munitions List with no written basis retained for the determination. An unsupported determination does not survive an audit, and it cannot be defended or re-used when the part is re-reviewed.`,
         value: p.controlCode, valueLabel: 'USML category',
         meta: [p.nomenclature, p.program, `${p.method}, ${fmtDate(p.determinedOn)}`],
-        owner: p.analyst, cite: '22 CFR 122.5', rank: -p.determinedOn.getTime(), view: 'class', focus: p.partNumber,
+        owner: p.analyst, onsetOn: p.determinedOn, cite: '22 CFR 122.5', view: 'class', focus: p.partNumber,
       })),
   },
   {
@@ -1236,7 +1290,7 @@ const RULES = [
           why: `The determination of record was made ${fmtDate(p.determinedOn)} and passed its ${REVIEW_CYCLE_YEARS}-year re-review date ${fmtInt(overdue)} days ago. Control lists and product configurations both move; a determination that is never revisited quietly becomes the wrong one.`,
           value: `${fmtInt(overdue)} days`, valueLabel: 'past due',
           meta: [p.nomenclature, p.program, `${p.jurisdiction}${p.controlCode ? ' · ' + p.controlCode : ''}`],
-          owner: p.analyst, cite: `Policy: ${REVIEW_CYCLE_YEARS}-year cycle`, rank: overdue, view: 'class', focus: p.partNumber,
+          owner: p.analyst, onsetOn: p.reviewDueOn, cite: `Policy: ${REVIEW_CYCLE_YEARS}-year cycle`, view: 'class', focus: p.partNumber,
         };
       }),
   },
@@ -1253,7 +1307,7 @@ const RULES = [
         why: `Submitted ${fmtDate(a.submittedOn)} and still undecided at ${age} days, beyond the ${POLICY.ADJUDICATION_NORMAL_DAYS}-day window this portfolio normally sees. Cases that sit this long are usually on hold pending a request for information that has not been answered.`,
         value: `${age} days`, valueLabel: 'since submission',
         meta: [a.kindLabel, a.program, a.destinations.join(', '), `${fmtUsd(a.authorizedValueUsd)} requested`],
-        owner: a.analyst, cite: `Policy: ${POLICY.ADJUDICATION_NORMAL_DAYS}-day window`, rank: age, view: 'auth', focus: a.id,
+        owner: a.analyst, onsetOn: addDays(a.submittedOn, POLICY.ADJUDICATION_NORMAL_DAYS), cite: `Policy: ${POLICY.ADJUDICATION_NORMAL_DAYS}-day window`, view: 'auth', focus: a.id,
       })),
   },
   {
@@ -1268,7 +1322,7 @@ const RULES = [
         why: `${open.length} proviso${open.length > 1 ? 's have' : ' has'} no acknowledgement date recorded against this live authorization. The same exposure as a larger gap, at lower volume — the condition binds regardless.`,
         value: `${open.length}`, valueLabel: `of ${a.provisos.length} provisos`,
         meta: [a.kindLabel, a.program, `Issued ${fmtDate(a.issuedOn)}`],
-        owner: a.analyst, cite: '22 CFR 127.1', rank: open.length, view: 'auth', focus: a.id,
+        owner: a.analyst, onsetOn: a.issuedOn, cite: '22 CFR 127.1', view: 'auth', focus: a.id,
       })),
   },
 ];
@@ -1281,12 +1335,31 @@ const RULES = [
  * the visible queue and bury the other nine — which is exactly the failure the
  * queue exists to prevent.
  */
-function buildQueue(slice, at) {
+function buildQueue(slice, at, workflow = {}) {
+  const cleared = workflow.cleared || new Set();
+  const reassigned = workflow.reassigned || new Map();
+
   const byRule = RULES.map((r) => ({
     rule: r,
     items: r.run(slice, at)
-      .sort((x, y) => y.rank - x.rank)
-      .map((it) => ({ ...it, severity: r.severity, ruleKey: r.key, ruleName: r.name })),
+      .map((it) => {
+        /* Stable across renders because the rules are deterministic: the same
+           condition on the same record is always the same action. */
+        const actionId = `${r.key}:${it.subject}`;
+        const dueOn = addDays(it.onsetOn, ACTION_SLA_DAYS[r.severity]);
+        return {
+          ...it,
+          actionId, dueOn,
+          overdueDays: Math.max(0, daysBetween(dueOn, at)),
+          openDays: Math.max(0, daysBetween(it.onsetOn, at)),
+          owner: reassigned.get(actionId) || it.owner,
+          severity: r.severity, ruleKey: r.key, ruleName: r.name,
+        };
+      })
+      .filter((it) => !cleared.has(it.actionId))
+      /* One ordering principle for every rule: soonest due first, so the most
+         overdue work floats to the top of its lane. */
+      .sort((x, y) => x.dueOn - y.dueOn),
   }));
 
   const counts = new Map(byRule.map((b) => [b.rule.key, b.items.length]));
@@ -1302,7 +1375,21 @@ function buildQueue(slice, at) {
       for (const lane of lanes) if (lane.length) ordered.push(lane.shift());
     }
   }
-  return { items: ordered, total, counts, bySeverity };
+  return {
+    items: ordered, total, counts, bySeverity,
+    overdue: ordered.filter((i) => i.overdueDays > 0).length,
+    /* Workload by owner, which is the question a head of function actually
+       asks of a queue this size. */
+    byOwner: [...groupBy(ordered, (i) => i.owner).entries()]
+      .map(([owner, items]) => ({
+        owner,
+        total: items.length,
+        overdue: items.filter((i) => i.overdueDays > 0).length,
+        oldest: Math.max(0, ...items.map((i) => i.openDays)),
+        ...Object.fromEntries(SEVERITY_ORDER.map((sv) => [sv, items.filter((i) => i.severity === sv).length])),
+      }))
+      .sort((a, b) => b.total - a.total || b.overdue - a.overdue),
+  };
 }
 
 /* ============================================================================
@@ -1844,6 +1931,22 @@ function sparkline(w, values, { height = 34, accent = 'var(--series-1)' } = {}) 
    page always agree with each other.
    ========================================================================== */
 const STATE = { view: 'posture', program: 'all', site: 'all', regime: 'all', queueExpanded: false, focus: null };
+
+/* Assignment and clearing are held in this browser session only — there is no
+   back end to write to, and pretending otherwise would be the one dishonest
+   thing on the page. The UI says so, next to the controls. */
+const WORKFLOW = { cleared: new Set(), reassigned: new Map() };
+const ANALYST_ROSTER = [...new Set([
+  ...DATA.authorizations.map((a) => a.analyst),
+  ...DATA.classifications.map((p) => p.analyst),
+])].sort();
+
+/** Days read as days up to a point, then as years — "3,387 days overdue" is a
+    number nobody converts in their head. */
+function fmtDuration(days) {
+  if (days < 400) return `${fmtInt(days)} day${days === 1 ? '' : 's'}`;
+  return `${(days / 365).toFixed(1)} years`;
+}
 const AS_OF = DATA.asOf;
 
 function currentSlice() {
@@ -1897,7 +2000,7 @@ function renderPosture(host, slice) {
   const months = trendMonths(AS_OF);
   const hist = months.map((m) => measures(slice, m));
   const monthLabels = months.map(fmtMonYear);
-  const queue = buildQueue(slice, AS_OF);
+  const queue = buildQueue(slice, AS_OF, WORKFLOW);
 
   /* ---- Hero + severity split ---- */
   const hero = html('section', { class: 'card hero' });
@@ -1917,6 +2020,16 @@ function renderPosture(host, slice) {
     ]));
   }
   hero.appendChild(split);
+  /* With a backlog this old, "overdue" on its own stops discriminating — most
+     of it is. Age is what says whether this is a spike or a standing problem,
+     so both are stated rather than only the alarming one. */
+  const ages = queue.items.map((i) => i.openDays);
+  const fresh = queue.items.filter((i) => i.openDays <= 90).length;
+  hero.appendChild(html('p', {
+    class: 'hero-note',
+    text: queue.total === 0 ? 'Nothing open in the current selection.'
+      : `${fmtInt(queue.overdue)} past their service level · median action open ${fmtDuration(median(ages))} · ${fmtInt(fresh)} opened in the last 90 days`,
+  }));
   host.appendChild(hero);
 
   /* ---- Six KPI tiles, each carrying its own 12-month trend ---- */
@@ -1999,7 +2112,7 @@ function renderPosture(host, slice) {
   host.appendChild(html('div', { class: 'section-head' }, [
     html('h2', { text: 'Needs attention' }),
     html('p', {
-      text: 'Every row is a rule evaluated against the record set, with the reason it matters stated in full. Severity orders the queue; within a severity tier the rule kinds are dealt out round-robin, so a single rule matching many records cannot bury the other nine.',
+      text: 'Every row is a rule evaluated against the record set, with the reason it matters stated in full, the analyst who owns it, and the date it fell due. Severity orders the queue; within a tier the rule kinds are dealt out round-robin, and within a rule the soonest due comes first. Reassigning an owner or clearing an action is held in this browser session only — there is no system of record behind this page to write to.',
     }),
   ]));
 
@@ -2032,10 +2145,36 @@ function renderPosture(host, slice) {
       ]));
       row.appendChild(html('p', { class: 'qwhy', text: it.why }));
       const meta = html('p', { class: 'qmeta' });
-      meta.appendChild(html('span', { text: `Owner: ${it.owner}` }));
+      meta.appendChild(html('span', { text: `Open ${fmtDuration(it.openDays)}` }));
+      meta.appendChild(html('span', {
+        class: it.overdueDays > 0 ? 'overdue' : '',
+        text: it.overdueDays > 0
+          ? `Due ${fmtDate(it.dueOn)} — ${fmtDuration(it.overdueDays)} overdue`
+          : `Due ${fmtDate(it.dueOn)}`,
+      }));
       for (const m of it.meta) if (m) meta.appendChild(html('span', { text: m }));
       meta.appendChild(html('span', { class: 'cite', text: it.cite }));
       row.appendChild(meta);
+
+      const act = html('p', { class: 'qact' });
+      const sel = html('select', { 'aria-label': `Owner of ${it.subject}` });
+      for (const name of ANALYST_ROSTER) {
+        const opt = html('option', { value: name, text: name });
+        if (name === it.owner) opt.selected = true;
+        sel.appendChild(opt);
+      }
+      sel.addEventListener('change', (e) => {
+        WORKFLOW.reassigned.set(it.actionId, e.target.value);
+        render();
+      });
+      act.appendChild(html('span', { class: 'muted', text: 'Owner' }));
+      act.appendChild(sel);
+      act.appendChild(html('button', {
+        class: 'btn btn-sm', type: 'button', text: 'Clear action',
+        'aria-label': `Clear ${it.subject} from the queue`,
+        onclick: () => { WORKFLOW.cleared.add(it.actionId); render(); },
+      }));
+      row.appendChild(act);
       queueCard.appendChild(row);
     }
     if (queue.items.length > defaultCount) {
@@ -2058,7 +2197,60 @@ function renderPosture(host, slice) {
       ]));
     }
   }
+  if (WORKFLOW.cleared.size) {
+    queueCard.appendChild(html('div', { class: 'queue-more' }, [
+      html('p', {
+        class: 'muted', style: 'font-size:12px; margin-bottom:8px',
+        text: `${fmtInt(WORKFLOW.cleared.size)} action${WORKFLOW.cleared.size === 1 ? '' : 's'} cleared in this browser session. Nothing was written back — a reload restores them.`,
+      }),
+      html('button', {
+        class: 'btn', type: 'button', text: 'Restore cleared actions',
+        onclick: () => { WORKFLOW.cleared.clear(); render(); },
+      }),
+    ]));
+  }
   host.appendChild(queueCard);
+
+  /* ---- Workload by owner ---- */
+  host.appendChild(html('div', { class: 'section-head' }, [
+    html('h2', { text: 'Workload by owner' }),
+    html('p', { text: 'Who is carrying the open actions, and how much of each analyst\u2019s load is already past its service level. Severity is an ordered scale, so the segments take a one-hue ramp \u2014 darker is more severe \u2014 and the legend carries the same icons as the queue chips.' }),
+  ]));
+  const wl = queue.byOwner;
+  host.appendChild(figure({
+    title: 'Open actions by owner and severity',
+    subtitle: 'Every open action in the current selection, attributed to the analyst who owns the record.',
+    legend: SEVERITY_ORDER.map((sv) => ({
+      label: `${SEVERITY_META[sv].icon} ${SEVERITY_META[sv].label}`,
+      color: `var(--sev-${sv})`, shape: 'rect',
+    })),
+    footnote: wl.length
+      ? `Ownership follows the program, so a reassignment here moves one action, not a book of work. The most loaded analyst carries ${fmtInt(wl[0].total)} open actions, ${fmtInt(wl[0].overdue)} of them past the service level.`
+      : 'No open actions in the current selection.',
+    draw: (w) => columns(w, {
+      labels: wl.map((o) => o.owner),
+      series: SEVERITY_ORDER.map((sv) => ({
+        label: SEVERITY_META[sv].label,
+        color: c(`--sev-${sv}`),
+        values: wl.map((o) => o[sv]),
+      })),
+      mode: 'stacked', height: 170,
+      tipTitle: (i) => wl[i].owner,
+      annotate: () => (wl.length ? { index: 0, value: wl[0].total, text: `${wl[0].total} open` } : null),
+    }),
+    table: {
+      columns: [
+        { key: 'owner', label: 'Owner' }, { key: 'critical', label: 'Critical', num: true },
+        { key: 'serious', label: 'Serious', num: true }, { key: 'watch', label: 'Watch', num: true },
+        { key: 'total', label: 'Total', num: true }, { key: 'overdue', label: 'Past service level', num: true },
+        { key: 'oldest', label: 'Oldest open', num: true },
+      ],
+      rows: wl.map((o) => ({
+        owner: o.owner, critical: fmtInt(o.critical), serious: fmtInt(o.serious), watch: fmtInt(o.watch),
+        total: fmtInt(o.total), overdue: fmtInt(o.overdue), oldest: fmtDuration(o.oldest),
+      })),
+    },
+  }));
 
   /* ---- Rule coverage ---- */
   const ruleCard = html('section', { class: 'card', style: 'margin-top:16px' });

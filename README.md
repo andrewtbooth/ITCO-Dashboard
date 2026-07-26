@@ -37,7 +37,9 @@ matters written out in plain language, the analyst who owns it, and the
 regulatory or policy reference it rests on. **Clicking a row opens that record**
 in the relevant detail table, highlighted and expanded. Below the queue, an
 audit-readiness strip reports whether the supporting paper exists, independent of
-whether the underlying decision was right.
+whether the underlying decision was right. Between them sits **workload by
+owner** — who is carrying the open actions and how much of each analyst's load
+is already past its service level.
 
 **Authorizations** covers the expiry pipeline for the next 12 months, value
 utilization against the 85% amendment threshold, authorized value by destination
@@ -59,6 +61,9 @@ concentration, determination throughput, and a sortable part-level table.
 | Backlog aging | Days since a part without a determination entered the item master |
 | Licensing turnaround | Median days from submission to issuance, trailing 90 days |
 | Determination throughput | Parts entering the queue vs. determinations completed, by month |
+| Action onset | The date the condition actually became true — an expiry date, the shipment that broke a licence, or the date cumulative shipped value crossed the amendment threshold, read off the shipment history |
+| Action due date | Onset + a remediation window by severity: 5 days critical, 30 serious, 90 watch |
+| Past service level | Open actions whose due date has passed |
 
 Nothing on the page is a hardcoded number. Every tile, chart, and queue row is
 computed from the record set at load time, so filtering recomputes all of them
@@ -113,6 +118,29 @@ internal policy rather than regulatory deadlines. Every threshold the page
 applies is named in one `POLICY` object at the top of the script, with the
 re-review cycle as its own constant, `REVIEW_CYCLE_YEARS`.
 
+## Working the queue
+
+Every action carries the analyst who owns it and the date it fell due. The due
+date is derived, not assigned: each rule reports the date its condition actually
+became true — the expiry date, the shipment that broke the licence, the date
+cumulative shipped value crossed 85% — and the remediation window for its
+severity is added to that. A finding cannot be made to look fresh by being
+discovered late.
+
+Actions can be **reassigned to another analyst** and **cleared from the queue**.
+Both are held in the browser session only: there is no system of record behind
+this page, and a reload restores everything. The page says so next to the
+controls rather than leaving it to be discovered.
+
+### On reading "overdue"
+
+Most of the queue is past its service level, and that is the finding rather than
+a display problem. These are standing gaps — a determination held without a
+written basis since 2021 has genuinely been deficient since 2021. Because
+"overdue" therefore stops discriminating, the hero line reports the median age
+of an open action and how many opened in the last 90 days alongside it, so a
+chronic backlog cannot be mistaken for a spike.
+
 ## Replacing the synthetic data
 
 The mock data layer is fenced inside `index.html` by a single comment block:
@@ -157,6 +185,11 @@ because uniform draws produce charts that quietly contradict what they claim:
   and contradicts its own title.
 - **Acknowledgement discipline clusters by record**, which is what makes a
   three-or-more proviso finding a different problem from a one-or-two finding.
+- **Proviso gaps close over time.** An authorization issued years ago has been
+  through internal review and at least one audit cycle, so open provisos
+  concentrate on recent issuances. Without that decay the data implied
+  conditions left unacknowledged for a decade, and every action in the queue
+  read as years overdue — which makes "overdue" mean nothing at all.
 - **Agreements name parties in more than one region.** `region` is the region of
   the primary destination, not the only one present, so the value-by-region
   chart is a genuine roll-up rather than a relabelling — which is what its
@@ -174,13 +207,23 @@ authorization that had none left — a condition the rules flag.
   `prefers-color-scheme: dark` and again under `:root[data-theme="dark"|"light"]`
   so a viewer's explicit theme choice wins over the OS setting in both directions.
 - **The chart palette is validated, not eyeballed.** The categorical slots and
-  both ordinal ramps (4-step backlog aging, 5-step value utilization) were run
-  through the computable checks — lightness band, chroma floor, CVD separation,
-  normal-vision floor and contrast for the categorical set; monotone lightness,
-  adjacent ΔL, light-end contrast and single hue for the ramps — against this
-  page's actual light and dark surfaces. All six runs pass. Status colours are
-  reserved, never reused as a series colour, and never share a chart with a
-  categorical or ordinal scale.
+  the three ordinal ramps (4-step backlog aging, 5-step value utilization,
+  3-step severity) were run through the computable checks — lightness band,
+  chroma floor, CVD separation, normal-vision floor and contrast for the
+  categorical set; monotone lightness, adjacent ΔL, light-end contrast and
+  single hue for the ramps — against all three surfaces this page renders on:
+  light, dark, and the pure white of print. **Twelve runs, all passing.**
+- **Severity is a ramp, not the status palette — and that was a measured
+  decision.** The workload chart stacks actions by severity, and the obvious
+  move is to paint the segments in the status colours they wear everywhere
+  else. Measured as a series set, that fails: status-serious `#ec835a` against
+  status-warning `#fab219` sits at ΔE 13.6, under the normal-vision floor of
+  15, which secondary encoding does not excuse. Those four steps are a fixed
+  scale for marking state on a chip or a meter, not a mutually distinguishable
+  series set. Severity is an *ordered* scale, so the chart takes a one-hue
+  ramp — darker is more severe — while the chips keep the status colours. The
+  legend carries the same `◆ ▲ ●` icons as the chips, so identity never rests
+  on matching colours across components.
 - **Every chart has a table-view twin**, so no value is reachable only by hover.
   Charts with two or more series always carry a legend; direct labels are used
   selectively rather than on every point.
