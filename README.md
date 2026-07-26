@@ -33,9 +33,11 @@ voluntary disclosure tracking, and training completion.
 **Posture** opens with the count of open compliance actions, six KPI tiles each
 carrying a 12-month trend, and a prioritized *Needs attention* queue. Every row
 in that queue is a rule evaluated against the record set, with the reason it
-matters written out in plain language. Below it, an audit-readiness strip reports
-whether the supporting paper exists, independent of whether the underlying
-decision was right.
+matters written out in plain language, the analyst who owns it, and the
+regulatory or policy reference it rests on. **Clicking a row opens that record**
+in the relevant detail table, highlighted and expanded. Below the queue, an
+audit-readiness strip reports whether the supporting paper exists, independent of
+whether the underlying decision was right.
 
 **Authorizations** covers the expiry pipeline for the next 12 months, value
 utilization against the 85% amendment threshold, authorized value by destination
@@ -92,11 +94,22 @@ how much.
 
 ### Regulatory references
 
-22 CFR 120–130 (ITAR), including §122.5 recordkeeping and §127.12 voluntary
-disclosure; 15 CFR 730–774 (EAR), including Part 762 recordkeeping. Citations
-locate the obligation. They are not legal advice, and the thresholds used here
-(85% utilization, 90-day expiry window, 3-year re-review cycle) are illustrative
-policy settings rather than regulatory deadlines. Every threshold the page
+Each rule carries either a regulatory citation or an explicitly labelled policy
+setting — never a bare assertion. The citations in use:
+
+| Reference | Used for |
+|---|---|
+| 22 CFR 123.5 | Temporary export licences (DSP-73) and the obligation to return the items |
+| 22 CFR 127.1 | Violations, including failing to comply with the terms or conditions of a licence — the basis for the proviso rules |
+| 22 CFR 127.12 | Voluntary disclosure |
+| 22 CFR 122.5 | ITAR recordkeeping, five years — supporting records and the retained basis for a determination |
+| 15 CFR 762 | EAR recordkeeping, five years |
+
+Everything else the queue raises is a `Policy:` setting, shown as such on the
+row. Citations locate the obligation; **they are not legal advice**, and the
+thresholds used here (85% utilization, a 90-day expiry window, a 90-day
+classification service level, a 3-year re-review cycle) are illustrative
+internal policy rather than regulatory deadlines. Every threshold the page
 applies is named in one `POLICY` object at the top of the script, with the
 re-review cycle as its own constant, `REVIEW_CYCLE_YEARS`.
 
@@ -186,6 +199,17 @@ authorization that had none left — a condition the rules flag.
   rather than parked, since the active pane is rebuilt from scratch anyway —
   which keeps the posture view at ~690 nodes and 9 tab stops instead of ~14,700
   and 490.
+
+## Printing
+
+Compliance work ends up in audit files and board packs, so the page has a print
+stylesheet. Interactive chrome is dropped, the light tokens are forced regardless
+of the theme on screen, scroll boxes open out to full length, and nothing breaks
+across a page mid-record. A print-only line carries the view, the active filters,
+the extract date and the synthetic-data warning, so a printed page is never
+adrift from the selection that produced it.
+
+Each view prints separately — the tab you are on is the one that comes out.
 
 ## Layout
 

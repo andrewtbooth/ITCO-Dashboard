@@ -388,6 +388,18 @@ tr.detail > td { padding: 0 0 14px; white-space: normal; }
   .qrow .qwhy, .qrow .qmeta { grid-column: 1; }
   .qrow .qval { text-align: left; }
 }
+.qrow .drill {
+  appearance: none; background: none; border: 0; padding: 0; font: inherit;
+  font-size: 13px; font-weight: 600; color: var(--text-primary); cursor: pointer;
+  text-align: left; text-decoration: underline;
+  text-decoration-color: var(--border-strong); text-underline-offset: 3px;
+}
+.qrow .drill:hover { text-decoration-color: var(--series-1); }
+tr.row-focus > td {
+  background: var(--surface-2);
+  background: color-mix(in oklab, var(--series-1) 14%, var(--surface-1));
+  box-shadow: inset 2px 0 0 var(--series-1);
+}
 .queue-more { margin-top: 12px; }
 .queue-empty { padding: 22px 2px; color: var(--text-secondary); font-size: 13px; }
 
@@ -427,6 +439,53 @@ tr.detail > td { padding: 0 0 14px; white-space: normal; }
 #tip .tip-name { color: var(--text-secondary); }
 
 /* ============================================================================
+   PRINT
+   Compliance work ends up in audit files and board packs, so the page has to
+   survive Ctrl-P. Interactive chrome is dropped, the light tokens are forced
+   regardless of theme, scroll boxes are opened out to full length, and nothing
+   is allowed to break across a page mid-record. Each view prints separately —
+   the tab you are on is the one that comes out.
+   ========================================================================== */
+.printonly { display: none; }
+@media print {
+  :root, :root[data-theme="dark"] {
+    color-scheme: light;
+    --page: #ffffff; --surface-1: #ffffff; --surface-2: #f2f1ed;
+    --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #6b6a66;
+    --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,.28);
+    --border-strong: rgba(11,11,11,.4); --ghost: transparent;
+    --series-1: #2a78d6; --series-2: #eb6834; --de-emphasis: #898781;
+    --ord-1: #86b6ef; --ord-2: #5598e7; --ord-3: #256abf; --ord-4: #0d366b;
+    --util-1: #86b6ef; --util-2: #5598e7; --util-3: #2a78d6; --util-4: #1c5cab; --util-5: #0d366b;
+    --success-text: #006300; --shadow: none;
+  }
+  @page { margin: 14mm; }
+  body { background: #fff; font-size: 10.5pt; }
+  .wrap { max-width: none; padding: 0; }
+  .masthead { border: 0; }
+  .masthead-inner { padding: 0; max-width: none; }
+
+  /* Controls do nothing on paper. */
+  #theme-toggle, .tabs, .filters, .viewtoggle, .queue-more button,
+  .sortbtn .arrow, #tip { display: none !important; }
+  .printonly { display: block; font-size: 9.5pt; color: var(--text-secondary); margin-top: 10px; }
+
+  /* Never split a record across a page. */
+  .card, .qrow, .meter, .kpi, .fig, tr, .detailbox { break-inside: avoid; page-break-inside: avoid; }
+  .section-head { break-after: avoid; page-break-after: avoid; }
+
+  /* Open every scroll box out to its full height. */
+  .tablewrap { max-height: none !important; overflow: visible !important; }
+  table.data th { position: static; }
+
+  .card { border-color: rgba(11,11,11,.28); box-shadow: none; }
+  .grid-2 { display: block; }
+  .grid-2 > .card { margin-bottom: 12px; }
+  .kpis { grid-template-columns: repeat(3, 1fr); }
+  a[href]::after { content: ""; }
+}
+
+/* ============================================================================
    FOOTNOTES
    ========================================================================== */
 .notes { margin-top: 34px; font-size: 12px; color: var(--text-muted); max-width: 92ch; }
@@ -453,6 +512,7 @@ tr.detail > td { padding: 0 0 14px; white-space: normal; }
         <strong>Proof of concept.</strong>
         <span>Every program, part number, authorization number, foreign party and determination on this page is synthetic and generated in the browser. Nothing here is a compliance record.</span>
       </p>
+      <p class="printonly" id="print-scope"></p>
       <div class="tabs" role="tablist" aria-label="Dashboard views">
         <button class="tab" role="tab" id="tab-posture" aria-controls="view-posture" aria-selected="true" type="button">Posture</button>
         <button class="tab" role="tab" id="tab-auth" aria-controls="view-auth" aria-selected="false" type="button">Authorizations</button>
@@ -582,6 +642,10 @@ function groupBy(xs, key) {
                                   and the shipment history.
      program             string   internal program name
      site                string   responsible facility
+     analyst             string   trade compliance analyst who owns the record.
+                                  Every action the queue raises is addressed to
+                                  this person — a work queue with no owner is a
+                                  reading exercise, not a work queue.
      submittedOn         Date     date the application left the company
      issuedOn            Date|null  date the authorization was granted
      expiresOn           Date|null  expiration date on the face of the authorization
@@ -604,6 +668,7 @@ function groupBy(xs, key) {
      nomenclature        string   plain description
      program             string   internal program name
      site                string   responsible facility
+     analyst             string   trade compliance analyst who owns the record
      addedOn             Date     date the part entered the item master
      jurisdiction        string|null  'ITAR' | 'EAR' | 'Not subject'
                                       null means no determination of record — this
@@ -740,6 +805,9 @@ const DATA = (function buildMockData() {
      concentration chart into ten equal bars and quietly contradict the point
      it is making. */
   const programControls = new Map(PROGRAMS.map((p) => [p.name, { usml: pick(USML), eccn: pick(ECCN_CONTROLLED) }]));
+  /* Programs are staffed, so ownership follows the program rather than being
+     sprinkled across records at random. */
+  const programAnalyst = new Map(PROGRAMS.map((p, i) => [p.name, ANALYSTS[i % ANALYSTS.length]]));
 
   const parts = [];
   const PART_COUNT = 780;
@@ -763,6 +831,7 @@ const DATA = (function buildMockData() {
     if (!determined) {
       parts.push({
         partNumber, nomenclature: pick(NOMENCLATURE), program: prog.name, site: prog.site,
+        analyst: programAnalyst.get(prog.name),
         addedOn, jurisdiction: null, controlCode: null, determinedOn: null,
         determinedBy: null, method: null, basisOnFile: false, reviewDueOn: null,
       });
@@ -786,6 +855,7 @@ const DATA = (function buildMockData() {
 
     parts.push({
       partNumber, nomenclature: pick(NOMENCLATURE), program: prog.name, site: prog.site,
+      analyst: programAnalyst.get(prog.name),
       addedOn, jurisdiction, controlCode, determinedOn,
       determinedBy: pick(ANALYSTS),
       method: weighted(METHODS.map((x) => ({ ...x, w: x.w }))).m,
@@ -937,7 +1007,8 @@ const DATA = (function buildMockData() {
 
     return {
       id, kind: k.kind, kindLabel: k.kindLabel, regime: k.regime, temporary: k.temporary,
-      status, program: prog.name, site: prog.site, submittedOn, issuedOn, expiresOn,
+      status, program: prog.name, site: prog.site, analyst: programAnalyst.get(prog.name),
+      submittedOn, issuedOn, expiresOn,
       authorizedValueUsd, destinations, region: reg.region, foreignParties, provisos, shipments,
       partNumbers: sample((partsByProgram.get(prog.name) || []).map((p) => p.partNumber), int(2, 5)),
       recordsOnFile: status === 'Issued' ? chance(0.935) : true,
@@ -1059,7 +1130,7 @@ const RULES = [
           why: `Items exported under a temporary authorization are still abroad ${overdue} days after it expired, with no record of their return. Until they are reconciled as returned or covered by a new authorization, they are abroad without one.`,
           value: `${fmtInt(overdue)} days`, valueLabel: 'past expiry',
           meta: [a.kindLabel, a.program, a.destinations.join(', '), `Expired ${fmtDate(a.expiresOn)}`],
-          cite: '22 CFR 123.5', rank: overdue, view: 'auth', focus: a.id,
+          owner: a.analyst, cite: '22 CFR 123.5', rank: overdue, view: 'auth', focus: a.id,
         };
       }),
   },
@@ -1076,7 +1147,7 @@ const RULES = [
         why: `${late.length === 1 ? 'A shipment was' : `${late.length} shipments were`} recorded against this authorization after it expired, the last one ${daysBetween(a.expiresOn, late[late.length - 1].date)} days past the expiration date. Assess against the voluntary disclosure decision.`,
         value: fmtUsd(sum(late.map((sh) => sh.valueUsd))), valueLabel: 'shipped after expiry',
         meta: [a.kindLabel, a.program, a.destinations.join(', '), `Expired ${fmtDate(a.expiresOn)}`],
-        cite: '22 CFR 127.12', rank: sum(late.map((sh) => sh.valueUsd)), view: 'auth', focus: a.id,
+        owner: a.analyst, cite: '22 CFR 127.12', rank: sum(late.map((sh) => sh.valueUsd)), view: 'auth', focus: a.id,
       })),
   },
   {
@@ -1091,7 +1162,7 @@ const RULES = [
         why: `${fmtUsd(a.authorizedValueUsd - shippedBy(a, at))} of authorized value remains against ${Math.round(rem / 30.4)} months of remaining term. The value will be exhausted long before the authorization expires, and an amendment takes longer to obtain than the remaining balance will cover.`,
         value: fmtPct(u), valueLabel: 'consumed',
         meta: [a.kindLabel, a.program, `${fmtUsd(a.authorizedValueUsd)} authorized`, `Expires ${fmtDate(a.expiresOn)}`],
-        cite: 'Policy: amendment at ' + fmtPct(POLICY.UTILIZATION_THRESHOLD), rank: u, view: 'auth', focus: a.id,
+        owner: a.analyst, cite: 'Policy: amendment at ' + fmtPct(POLICY.UTILIZATION_THRESHOLD), rank: u, view: 'auth', focus: a.id,
       })),
   },
   {
@@ -1106,7 +1177,7 @@ const RULES = [
         why: `${open.length} of ${a.provisos.length} provisos on this live authorization have no acknowledgement date recorded. Unacknowledged provisos are the most common finding in a licensing audit, and the conditions bind whether or not anyone has read them.`,
         value: `${open.length}`, valueLabel: `of ${a.provisos.length} provisos`,
         meta: [a.kindLabel, a.program, `Issued ${fmtDate(a.issuedOn)}`],
-        cite: '22 CFR 123.9', rank: open.length, view: 'auth', focus: a.id,
+        owner: a.analyst, cite: '22 CFR 127.1', rank: open.length, view: 'auth', focus: a.id,
       })),
   },
   {
@@ -1120,7 +1191,7 @@ const RULES = [
         why: `No supporting record set is retained for this authorization. Five-year retention applies from the date of the transaction, and the records are what an audit examines first — their absence is a finding on its own, independent of whether the exports were properly authorized.`,
         value: a.expiresOn > at ? 'Live' : 'Expired', valueLabel: a.expiresOn > at ? `expires ${fmtDate(a.expiresOn)}` : fmtDate(a.expiresOn),
         meta: [a.kindLabel, a.program, `${a.shipments.length} shipments recorded`],
-        cite: a.regime === 'ITAR' ? '22 CFR 122.5' : '15 CFR 762', rank: shippedValue(a), view: 'auth', focus: a.id,
+        owner: a.analyst, cite: a.regime === 'ITAR' ? '22 CFR 122.5' : '15 CFR 762', rank: shippedValue(a), view: 'auth', focus: a.id,
       })),
   },
   {
@@ -1135,7 +1206,7 @@ const RULES = [
         why: `This part has been in the item master ${age} days with no jurisdiction and classification determination of record. Until it has one it cannot be quoted for export, shipped, or disclosed to a foreign national, and any movement of it is unassessed.`,
         value: `${age} days`, valueLabel: 'in queue',
         meta: [p.nomenclature, p.program, `Added ${fmtDate(p.addedOn)}`],
-        cite: `Policy: ${POLICY.CLASSIFICATION_SLA_DAYS}-day service level`, rank: age, view: 'class', focus: p.partNumber,
+        owner: p.analyst, cite: `Policy: ${POLICY.CLASSIFICATION_SLA_DAYS}-day service level`, rank: age, view: 'class', focus: p.partNumber,
       })),
   },
   {
@@ -1149,7 +1220,7 @@ const RULES = [
         why: `This part is controlled on the U.S. Munitions List with no written basis retained for the determination. An unsupported determination does not survive an audit, and it cannot be defended or re-used when the part is re-reviewed.`,
         value: p.controlCode, valueLabel: 'USML category',
         meta: [p.nomenclature, p.program, `${p.method}, ${fmtDate(p.determinedOn)}`],
-        cite: '22 CFR 120.10', rank: -p.determinedOn.getTime(), view: 'class', focus: p.partNumber,
+        owner: p.analyst, cite: '22 CFR 122.5', rank: -p.determinedOn.getTime(), view: 'class', focus: p.partNumber,
       })),
   },
   {
@@ -1165,7 +1236,7 @@ const RULES = [
           why: `The determination of record was made ${fmtDate(p.determinedOn)} and passed its ${REVIEW_CYCLE_YEARS}-year re-review date ${fmtInt(overdue)} days ago. Control lists and product configurations both move; a determination that is never revisited quietly becomes the wrong one.`,
           value: `${fmtInt(overdue)} days`, valueLabel: 'past due',
           meta: [p.nomenclature, p.program, `${p.jurisdiction}${p.controlCode ? ' · ' + p.controlCode : ''}`],
-          cite: `Policy: ${REVIEW_CYCLE_YEARS}-year cycle`, rank: overdue, view: 'class', focus: p.partNumber,
+          owner: p.analyst, cite: `Policy: ${REVIEW_CYCLE_YEARS}-year cycle`, rank: overdue, view: 'class', focus: p.partNumber,
         };
       }),
   },
@@ -1182,7 +1253,7 @@ const RULES = [
         why: `Submitted ${fmtDate(a.submittedOn)} and still undecided at ${age} days, beyond the ${POLICY.ADJUDICATION_NORMAL_DAYS}-day window this portfolio normally sees. Cases that sit this long are usually on hold pending a request for information that has not been answered.`,
         value: `${age} days`, valueLabel: 'since submission',
         meta: [a.kindLabel, a.program, a.destinations.join(', '), `${fmtUsd(a.authorizedValueUsd)} requested`],
-        cite: `Policy: ${POLICY.ADJUDICATION_NORMAL_DAYS}-day window`, rank: age, view: 'auth', focus: a.id,
+        owner: a.analyst, cite: `Policy: ${POLICY.ADJUDICATION_NORMAL_DAYS}-day window`, rank: age, view: 'auth', focus: a.id,
       })),
   },
   {
@@ -1197,7 +1268,7 @@ const RULES = [
         why: `${open.length} proviso${open.length > 1 ? 's have' : ' has'} no acknowledgement date recorded against this live authorization. The same exposure as a larger gap, at lower volume — the condition binds regardless.`,
         value: `${open.length}`, valueLabel: `of ${a.provisos.length} provisos`,
         meta: [a.kindLabel, a.program, `Issued ${fmtDate(a.issuedOn)}`],
-        cite: '22 CFR 123.9', rank: open.length, view: 'auth', focus: a.id,
+        owner: a.analyst, cite: '22 CFR 127.1', rank: open.length, view: 'auth', focus: a.id,
       })),
   },
 ];
@@ -1772,7 +1843,7 @@ function sparkline(w, values, { height = 34, accent = 'var(--series-1)' } = {}) 
    tile, chart, queue row and table from the same slice, so the numbers on the
    page always agree with each other.
    ========================================================================== */
-const STATE = { view: 'posture', program: 'all', site: 'all', regime: 'all', queueExpanded: false };
+const STATE = { view: 'posture', program: 'all', site: 'all', regime: 'all', queueExpanded: false, focus: null };
 const AS_OF = DATA.asOf;
 
 function currentSlice() {
@@ -1944,7 +2015,16 @@ function renderPosture(host, slice) {
     for (const it of shown) {
       const row = html('div', { class: 'qrow' });
       row.appendChild(html('div', {}, [chip(it.severity)]));
-      row.appendChild(html('p', { class: 'qtitle', text: it.title }));
+      /* Every rule already knows which view and which record it is about.
+         Wiring that up is the difference between "here is a finding" and
+         "here is the record, open". */
+      row.appendChild(html('p', { class: 'qtitle' }, [
+        html('button', {
+          class: 'drill', type: 'button', text: it.title,
+          title: `Open ${it.subject} in the ${it.view === 'auth' ? 'Authorizations' : 'Classification'} detail table`,
+          onclick: () => { STATE.view = it.view; STATE.focus = it.focus; render(); },
+        }),
+      ]));
       row.appendChild(html('p', { class: 'qval' }, [
         html('span', { text: it.value }),
         html('br'),
@@ -1952,6 +2032,7 @@ function renderPosture(host, slice) {
       ]));
       row.appendChild(html('p', { class: 'qwhy', text: it.why }));
       const meta = html('p', { class: 'qmeta' });
+      meta.appendChild(html('span', { text: `Owner: ${it.owner}` }));
       for (const m of it.meta) if (m) meta.appendChild(html('span', { text: m }));
       meta.appendChild(html('span', { class: 'cite', text: it.cite }));
       row.appendChild(meta);
@@ -2214,6 +2295,7 @@ function renderAuthorizations(host, slice) {
   const authRows = slice.authorizations.slice().sort((a, b) => (a.expiresOn || a.submittedOn) - (b.expiresOn || b.submittedOn));
   host.appendChild(sortableTable({
     rows: authRows, caption: 'Authorization detail',
+    focusKey: STATE.view === 'auth' ? STATE.focus : null,
     initial: { key: 'util', dir: 'desc' },
     columns: [
       { key: 'id', label: 'Authorization', sort: (a) => a.id, cell: (a) => a.id, expandable: true },
@@ -2231,6 +2313,7 @@ function renderAuthorizations(host, slice) {
       const box = html('div', { class: 'detailbox' });
       const facts = html('div', {}, [html('h4', { text: 'Record' })]);
       const kv = (k, v) => facts.appendChild(html('div', { class: 'kv' }, [html('span', { text: k }), html('span', { text: v })]));
+      kv('Owner', a.analyst);
       kv('Type', a.kindLabel);
       kv('Submitted', fmtDate(a.submittedOn));
       kv('Issued', fmtDate(a.issuedOn));
@@ -2424,6 +2507,7 @@ function renderClassification(host, slice) {
 
   host.appendChild(sortableTable({
     rows: parts.slice(), caption: 'Item master detail',
+    focusKey: STATE.view === 'class' ? STATE.focus : null,
     initial: { key: 'added', dir: 'asc' },
     columns: [
       { key: 'part', label: 'Part number', sort: (p) => p.partNumber, cell: (p) => p.partNumber },
@@ -2443,7 +2527,7 @@ function renderClassification(host, slice) {
 /* ============================================================================
    SORTABLE TABLE
    ========================================================================== */
-function sortableTable({ rows, columns, initial, caption, detail = null }) {
+function sortableTable({ rows, columns, initial, caption, detail = null, focusKey = null }) {
   const card = html('section', { class: 'card' });
   const wrap = html('div', { class: 'tablewrap', style: 'max-height:560px; overflow:auto' });
   const table = html('table', { class: 'data' });
@@ -2452,6 +2536,7 @@ function sortableTable({ rows, columns, initial, caption, detail = null }) {
   const tbody = html('tbody');
   let sortKey = initial.key, sortDir = initial.dir;
   const expanded = new Set();
+  if (focusKey && detail) expanded.add(focusKey);   // arrive with the record open
 
   const htr = html('tr');
   for (const col of columns) {
@@ -2478,6 +2563,12 @@ function sortableTable({ rows, columns, initial, caption, detail = null }) {
   card.appendChild(wrap);
   card.appendChild(html('p', { class: 'fig-foot', text: `${fmtInt(rows.length)} records in the current selection.` }));
 
+  /* The column that identifies a row. It is the expandable one where there is
+     one, and otherwise simply the first — the part table has no expandable
+     column, and without this fallback a drill-through into it would land on
+     the right view with nothing highlighted. */
+  const keyCol = columns.find((x) => x.expandable) || columns[0];
+
   function paint() {
     const col = columns.find((x) => x.key === sortKey) || columns[0];
     for (const x of columns) {
@@ -2492,7 +2583,8 @@ function sortableTable({ rows, columns, initial, caption, detail = null }) {
     });
     tbody.textContent = '';
     for (const row of sorted) {
-      const tr = html('tr');
+      const rowKey = keyCol ? keyCol.cell(row) : null;
+      const tr = html('tr', rowKey && rowKey === focusKey ? { class: 'row-focus' } : {});
       for (const cl of columns) {
         const td = html('td', { class: cl.num ? 'num' : '' });
         if (cl.expandable && detail) {
@@ -2514,7 +2606,7 @@ function sortableTable({ rows, columns, initial, caption, detail = null }) {
         tr.appendChild(td);
       }
       tbody.appendChild(tr);
-      const key = columns.find((x) => x.expandable) ? columns.find((x) => x.expandable).cell(row) : null;
+      const key = rowKey;
       if (detail && key && expanded.has(key)) {
         const dtr = html('tr', { class: 'detail' });
         dtr.appendChild(html('td', { colspan: String(columns.length) }, [detail(row)]));
@@ -2523,6 +2615,15 @@ function sortableTable({ rows, columns, initial, caption, detail = null }) {
     }
   }
   paint();
+  if (focusKey) {
+    requestAnimationFrame(() => {
+      const target = card.querySelector('tr.row-focus');
+      if (target) {
+        target.scrollIntoView({ block: 'center', behavior: 'auto' });
+        card.scrollIntoView({ block: 'start', behavior: 'auto' });
+      }
+    });
+  }
   return card;
 }
 
@@ -2539,6 +2640,13 @@ function render() {
   REDRAWS.length = 0;
   hideTip();
   const slice = currentSlice();
+
+  const viewName = { posture: 'Posture', auth: 'Authorizations', class: 'Classification' }[STATE.view];
+  document.getElementById('print-scope').textContent =
+    `${viewName} · Program: ${STATE.program === 'all' ? 'All' : STATE.program}`
+    + ` · Site: ${STATE.site === 'all' ? 'All' : STATE.site}`
+    + ` · Regime: ${STATE.regime === 'all' ? 'ITAR and EAR' : STATE.regime}`
+    + ` · Extract as of ${fmtDate(AS_OF)} · Synthetic data — not a compliance record`;
 
   const filtered = STATE.program !== 'all' || STATE.site !== 'all' || STATE.regime !== 'all';
   document.getElementById('f-reset').hidden = !filtered;
@@ -2578,12 +2686,14 @@ function boot() {
     document.getElementById(id).addEventListener('change', (e) => {
       STATE[key] = e.target.value;
       STATE.queueExpanded = false;
+      STATE.focus = null;
       render();
     });
   }
   document.getElementById('f-reset').addEventListener('click', () => {
     STATE.program = STATE.site = STATE.regime = 'all';
     STATE.queueExpanded = false;
+    STATE.focus = null;
     for (const id of ['f-program', 'f-site', 'f-regime']) document.getElementById(id).value = 'all';
     render();
   });
@@ -2593,7 +2703,7 @@ function boot() {
      the content is not what a tablist is supposed to cost. */
   const TAB_KEYS = ['posture', 'auth', 'class'];
   const selectTab = (key, focus) => {
-    if (STATE.view !== key) { STATE.view = key; render(); }
+    if (STATE.view !== key) { STATE.view = key; STATE.focus = null; render(); }
     if (focus) document.getElementById(`tab-${key}`).focus();
   };
   TAB_KEYS.forEach((key, i) => {
