@@ -992,10 +992,13 @@ function measures(slice, at) {
     liveCount: live.length,
     expiringCount: soon.length,
     expiringAtRiskValue: sum(soon.map((a) => Math.max(0, a.authorizedValueUsd - shippedBy(a, at)))),
-    utilization: authorized > 0 ? shipped / authorized : 0,
+    /* A ratio with nothing in its denominator is not zero, it is unknown.
+       Reporting 0% coverage for an empty selection would state something the
+       records do not say; these come back null and render as an em dash. */
+    utilization: authorized > 0 ? shipped / authorized : null,
     authorizedValue: authorized,
     openProvisoCount: sum(live.map((a) => openProvisos(a, at).length)),
-    coverage: known.length > 0 ? done.length / known.length : 0,
+    coverage: known.length > 0 ? done.length / known.length : null,
     undeterminedCount: known.length - done.length,
     partCount: known.length,
     turnaround: turnaroundMedian(slice.authorizations, at),
@@ -1840,9 +1843,9 @@ function renderPosture(host, slice) {
       delta: (a, b) => `${b - a >= 0 ? '+' : '−'}${fmtInt(Math.abs(b - a))}`, fmt: fmtInt,
     },
     {
-      label: 'Value utilization', value: fmtPct(now.utilization),
+      label: 'Value utilization', value: now.utilization === null ? '—' : fmtPct(now.utilization),
       note: `Amendment threshold at ${fmtPct(POLICY.UTILIZATION_THRESHOLD)} of authorized value`,
-      series: hist.map((h) => h.utilization * 100), dir: 'neutral',
+      series: hist.map((h) => (h.utilization === null ? null : h.utilization * 100)), dir: 'neutral',
       delta: (a, b) => `${b - a >= 0 ? '+' : '−'}${Math.abs(b - a).toFixed(1)} pts`, fmt: (v) => `${v.toFixed(0)}%`,
     },
     {
@@ -1852,9 +1855,10 @@ function renderPosture(host, slice) {
       delta: (a, b) => `${b - a >= 0 ? '+' : '−'}${fmtInt(Math.abs(b - a))}`, fmt: fmtInt,
     },
     {
-      label: 'Classification coverage', value: fmtPct(now.coverage, 1),
-      note: `${fmtInt(now.undeterminedCount)} of ${fmtInt(now.partCount)} parts have no determination of record`,
-      series: hist.map((h) => h.coverage * 100), dir: 'up',
+      label: 'Classification coverage', value: now.coverage === null ? '—' : fmtPct(now.coverage, 1),
+      note: now.partCount === 0 ? 'No parts in the current selection'
+        : `${fmtInt(now.undeterminedCount)} of ${fmtInt(now.partCount)} parts have no determination of record`,
+      series: hist.map((h) => (h.coverage === null ? null : h.coverage * 100)), dir: 'up',
       delta: (a, b) => `${b - a >= 0 ? '+' : '−'}${Math.abs(b - a).toFixed(1)} pts`, fmt: (v) => `${v.toFixed(1)}%`,
     },
     {
@@ -1867,7 +1871,7 @@ function renderPosture(host, slice) {
 
   const kpis = html('div', { class: 'kpis' });
   for (const t of tiles) {
-    const first = t.series.find((v) => v !== null);
+    const first = t.series.find((v) => v !== null && v !== undefined);
     const last = t.series[t.series.length - 1];
     const card = html('section', { class: 'card kpi' });
     card.appendChild(html('p', { class: 'k', text: t.label }));
