@@ -84,6 +84,12 @@ Severity orders the queue, but within a tier the rule kinds are dealt out
 round-robin — one rule matching forty records would otherwise fill the visible
 queue and bury the other nine.
 
+The queue is truncated by default, but **never across the critical tier**: the
+default view always runs to the end of critical and a few rows into the next
+tier, so no critical action is ever parked behind a "show more" button. The line
+above that button says what the fold is hiding, by severity, rather than only
+how much.
+
 ### Regulatory references
 
 22 CFR 120–130 (ITAR), including §122.5 recordkeeping and §127.12 voluntary
@@ -138,6 +144,10 @@ because uniform draws produce charts that quietly contradict what they claim:
   and contradicts its own title.
 - **Acknowledgement discipline clusters by record**, which is what makes a
   three-or-more proviso finding a different problem from a one-or-two finding.
+- **Agreements name parties in more than one region.** `region` is the region of
+  the primary destination, not the only one present, so the value-by-region
+  chart is a genuine roll-up rather than a relabelling — which is what its
+  footnote claims it is.
 
 Utilization above 100% appears only where value was shipped against an
 authorization that had none left — a condition the rules flag.
@@ -164,6 +174,18 @@ authorization that had none left — a condition the rules flag.
 - Charts are keyboard-reachable, hit targets span the full category band, and
   `prefers-reduced-motion` is respected. Series and category names reach the DOM
   through `textContent`, never through `innerHTML`.
+- **The tooltip is deliberately not a live region.** It updates on every
+  pointer move, so announcing it would flood a screen reader. Assistive
+  technology gets the same values from the `aria-label` on the focused chart
+  band and from each chart's table view.
+- Tabs follow the ARIA tabs pattern — one tab stop for the set, arrow keys and
+  Home/End to move between them. Every table carries a caption as its accessible
+  name, every chart carries its title, and opening a detail row keeps focus on
+  the row you opened.
+- Only the visible view holds DOM. Panes that leave the screen are emptied
+  rather than parked, since the active pane is rebuilt from scratch anyway —
+  which keeps the posture view at ~690 nodes and 9 tab stops instead of ~14,700
+  and 490.
 
 ## Layout
 

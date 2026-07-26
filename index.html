@@ -484,7 +484,11 @@ tr.detail > td { padding: 0 0 14px; white-space: normal; }
   </div>
 </main>
 
-<div id="tip" role="status" aria-live="polite"></div>
+<!-- Deliberately not a live region. The tooltip updates on every pointermove,
+     so announcing it would flood a screen reader; assistive technology gets the
+     same values from the aria-label on the focused chart band and from each
+     chart's table view. -->
+<div id="tip" aria-hidden="true"></div>
 
 <script>
 "use strict";
@@ -804,6 +808,14 @@ const DATA = (function buildMockData() {
     const reg = weighted(REGIONS);
     const destCount = k.kind === 'WDA' || k.kind === 'MLA' ? int(2, 4) : (chance(0.25) ? 2 : 1);
     const destinations = sample(reg.countries, Math.min(destCount, reg.countries.length));
+    /* Agreements routinely name parties in more than one region. `region` is
+       therefore the region of the primary destination, not the only one
+       present — which is what makes the value-by-region roll-up a roll-up
+       rather than a relabelling of the data. */
+    if ((k.kind === 'TAA' || k.kind === 'MLA' || k.kind === 'WDA') && chance(0.38)) {
+      const other = weighted(REGIONS.filter((r) => r.region !== reg.region));
+      destinations.push(pick(other.countries));
+    }
 
     seqs[k.kind] += int(3, 41);
     const yy = String(asOf.getUTCFullYear()).slice(2);
@@ -1260,7 +1272,10 @@ function auditReadiness(slice, at) {
   return rows.map((r) => {
     const pct = r.of > 0 ? r.have / r.of : 1;
     const status = pct >= 0.95 ? 'good' : pct >= 0.90 ? 'warning' : pct >= 0.80 ? 'serious' : 'critical';
-    return { ...r, pct, status };
+    /* Readiness borrows the status colours but not the queue's vocabulary —
+       "Serious" is a property of an action, not of a completeness measure. */
+    const statusLabel = { good: 'On track', warning: 'Monitor', serious: 'Gap', critical: 'Material gap' }[status];
+    return { ...r, pct, status, statusLabel };
   });
 }
 /* ============================================================================
@@ -1457,16 +1472,20 @@ function figure(spec) {
     for (const c of spec.table.columns) tr.appendChild(html('td', { class: c.num ? 'num' : '', text: row[c.key] }));
     tbody.appendChild(tr);
   }
+  /* The caption is the table's accessible name, so it belongs inside the
+     table element — parked on the wrapper it names nothing. */
+  table.appendChild(html('caption', { class: 'sr-only', text: spec.title }));
   table.appendChild(thead); table.appendChild(tbody);
-  tableWrap.appendChild(html('caption', { class: 'sr-only', text: spec.title }));
   tableWrap.appendChild(table);
   card.appendChild(tableWrap);
 
   function draw() {
     if (plot.hidden) return;
     const w = Math.max(280, plot.clientWidth || card.clientWidth - 40);
+    const node = spec.draw(w);
+    node.setAttribute('aria-label', spec.title);   // the chart's accessible name
     plot.textContent = '';
-    plot.appendChild(spec.draw(w));
+    plot.appendChild(node);
   }
   REDRAWS.push(draw);
   requestAnimationFrame(draw);
@@ -1788,12 +1807,13 @@ function inkOn(varName) {
   return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2] > 0.42 ? '#0b0b0b' : '#ffffff';
 }
 
-function chip(severity, extra) {
+function chip(severity, extra, label) {
   const meta = SEVERITY_META[severity];
+  const name = label || meta.label;
   return html('span', { class: `chip ${severity}` }, [
     html('span', { class: 'dot' }),
     html('span', { class: 'icon', text: meta.icon }),
-    html('span', { text: extra ? `${meta.label} · ${extra}` : meta.label }),
+    html('span', { text: extra ? `${name} · ${extra}` : name }),
   ]);
 }
 
@@ -1916,7 +1936,11 @@ function renderPosture(host, slice) {
   if (!queue.items.length) {
     queueCard.appendChild(html('p', { class: 'queue-empty', text: 'No rule matched the current selection. Widen the filters to see the full picture.' }));
   } else {
-    const shown = STATE.queueExpanded ? queue.items : queue.items.slice(0, 14);
+    /* A critical action is never parked behind a "show more". The default view
+       runs to the end of the critical tier and a few rows into the next, so the
+       reader can also see where the tier boundary falls. */
+    const defaultCount = Math.max(14, queue.bySeverity.critical + 3);
+    const shown = STATE.queueExpanded ? queue.items : queue.items.slice(0, defaultCount);
     for (const it of shown) {
       const row = html('div', { class: 'qrow' });
       row.appendChild(html('div', {}, [chip(it.severity)]));
@@ -1933,11 +1957,21 @@ function renderPosture(host, slice) {
       row.appendChild(meta);
       queueCard.appendChild(row);
     }
-    if (queue.items.length > 14) {
+    if (queue.items.length > defaultCount) {
+      const below = SEVERITY_ORDER
+        .map((sv) => ({ sv, n: queue.items.slice(defaultCount).filter((i) => i.severity === sv).length }))
+        .filter((x) => x.n > 0);
       queueCard.appendChild(html('div', { class: 'queue-more' }, [
+        /* Say what the fold is hiding rather than only how much. */
+        html('p', {
+          class: 'muted', style: 'font-size:12px; margin-bottom:8px',
+          text: STATE.queueExpanded
+            ? `All ${fmtInt(queue.items.length)} open actions shown, highest severity first.`
+            : `Below the fold: ${below.map((x) => `${fmtInt(x.n)} ${SEVERITY_META[x.sv].label.toLowerCase()}`).join(', ')}.`,
+        }),
         html('button', {
           class: 'btn', type: 'button',
-          text: STATE.queueExpanded ? `Show the first 14 of ${fmtInt(queue.items.length)}` : `Show all ${fmtInt(queue.items.length)} open actions`,
+          text: STATE.queueExpanded ? `Show the first ${fmtInt(defaultCount)} of ${fmtInt(queue.items.length)}` : `Show all ${fmtInt(queue.items.length)} open actions`,
           onclick: () => { STATE.queueExpanded = !STATE.queueExpanded; render(); },
         }),
       ]));
@@ -1990,7 +2024,7 @@ function renderPosture(host, slice) {
         'aria-label': `${r.name}: ${r.of ? fmtPct(r.pct, 1) : 'no records in scope'} — ${fmtInt(r.have)} of ${fmtInt(r.of)} ${r.unit}`,
       }, [html('div', { class: 'fill', style: `width:${(r.pct * 100).toFixed(1)}%` })]),
       html('div', { class: 'foot' }, [
-        chip(r.status, `${fmtInt(r.have)} of ${fmtInt(r.of)}`),
+        chip(r.status, `${fmtInt(r.have)} of ${fmtInt(r.of)}`, r.statusLabel),
         html('span', { text: r.foot }),
       ]),
     ]));
@@ -2179,7 +2213,7 @@ function renderAuthorizations(host, slice) {
 
   const authRows = slice.authorizations.slice().sort((a, b) => (a.expiresOn || a.submittedOn) - (b.expiresOn || b.submittedOn));
   host.appendChild(sortableTable({
-    rows: authRows,
+    rows: authRows, caption: 'Authorization detail',
     initial: { key: 'util', dir: 'desc' },
     columns: [
       { key: 'id', label: 'Authorization', sort: (a) => a.id, cell: (a) => a.id, expandable: true },
@@ -2389,7 +2423,7 @@ function renderClassification(host, slice) {
   ]));
 
   host.appendChild(sortableTable({
-    rows: parts.slice(),
+    rows: parts.slice(), caption: 'Item master detail',
     initial: { key: 'added', dir: 'asc' },
     columns: [
       { key: 'part', label: 'Part number', sort: (p) => p.partNumber, cell: (p) => p.partNumber },
@@ -2409,10 +2443,11 @@ function renderClassification(host, slice) {
 /* ============================================================================
    SORTABLE TABLE
    ========================================================================== */
-function sortableTable({ rows, columns, initial, detail = null }) {
+function sortableTable({ rows, columns, initial, caption, detail = null }) {
   const card = html('section', { class: 'card' });
   const wrap = html('div', { class: 'tablewrap', style: 'max-height:560px; overflow:auto' });
   const table = html('table', { class: 'data' });
+  table.appendChild(html('caption', { class: 'sr-only', text: caption }));
   const thead = html('thead');
   const tbody = html('tbody');
   let sortKey = initial.key, sortDir = initial.dir;
@@ -2465,7 +2500,15 @@ function sortableTable({ rows, columns, initial, detail = null }) {
           td.appendChild(html('button', {
             class: 'rowtoggle', type: 'button', text: key,
             'aria-expanded': String(expanded.has(key)),
-            onclick: () => { expanded.has(key) ? expanded.delete(key) : expanded.add(key); paint(); },
+            /* paint() rebuilds the body, destroying the button that was
+               clicked. Without this a keyboard user who opens a row is
+               dropped back to the top of the document. */
+            onclick: () => {
+              expanded.has(key) ? expanded.delete(key) : expanded.add(key);
+              paint();
+              const again = [...tbody.querySelectorAll('.rowtoggle')].find((x) => x.textContent === key);
+              if (again) again.focus();
+            },
           }));
         } else td.textContent = cl.cell(row);
         tr.appendChild(td);
@@ -2506,8 +2549,14 @@ function render() {
   const panes = { posture: 'view-posture', auth: 'view-auth', class: 'view-class' };
   for (const [key, id] of Object.entries(panes)) {
     const pane = document.getElementById(id);
-    pane.hidden = key !== STATE.view;
-    document.getElementById(`tab-${key}`).setAttribute('aria-selected', String(key === STATE.view));
+    const active = key === STATE.view;
+    pane.hidden = !active;
+    /* The active pane is rebuilt from scratch below, so a pane that is off
+       screen is holding thousands of nodes nothing will ever read again. */
+    if (!active) pane.textContent = '';
+    const tab = document.getElementById(`tab-${key}`);
+    tab.setAttribute('aria-selected', String(active));
+    tab.setAttribute('tabindex', active ? '0' : '-1');   // roving tab stop
   }
   if (STATE.view === 'posture') renderPosture(document.getElementById('view-posture'), slice);
   else if (STATE.view === 'auth') renderAuthorizations(document.getElementById('view-auth'), slice);
@@ -2539,13 +2588,28 @@ function boot() {
     render();
   });
 
-  for (const key of ['posture', 'auth', 'class']) {
-    document.getElementById(`tab-${key}`).addEventListener('click', () => {
-      if (STATE.view === key) return;
-      STATE.view = key;
-      render();
+  /* Tabs follow the ARIA tabs pattern: one tab stop for the whole set, with
+     the arrow keys moving between them. Tabbing through three tabs to reach
+     the content is not what a tablist is supposed to cost. */
+  const TAB_KEYS = ['posture', 'auth', 'class'];
+  const selectTab = (key, focus) => {
+    if (STATE.view !== key) { STATE.view = key; render(); }
+    if (focus) document.getElementById(`tab-${key}`).focus();
+  };
+  TAB_KEYS.forEach((key, i) => {
+    const tab = document.getElementById(`tab-${key}`);
+    tab.addEventListener('click', () => selectTab(key, false));
+    tab.addEventListener('keydown', (e) => {
+      const to = e.key === 'ArrowRight' ? (i + 1) % TAB_KEYS.length
+        : e.key === 'ArrowLeft' ? (i - 1 + TAB_KEYS.length) % TAB_KEYS.length
+        : e.key === 'Home' ? 0
+        : e.key === 'End' ? TAB_KEYS.length - 1
+        : -1;
+      if (to < 0) return;
+      e.preventDefault();
+      selectTab(TAB_KEYS[to], true);
     });
-  }
+  });
 
   /* The viewer's theme choice wins over the OS setting, in both directions. */
   const toggle = document.getElementById('theme-toggle');
