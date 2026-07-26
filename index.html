@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>Trade Compliance Posture — ITAR / EAR</title>
 <style>
 /* ============================================================================
@@ -17,17 +18,24 @@
 :root {
   color-scheme: light;
 
-  --page:            #f9f9f7;
-  --surface-1:       #fcfcfb;
+  /* surfaces — page sits under card, card under raised */
+  --page:            #f7f7f5;
+  --surface-1:       #ffffff;
   --surface-2:       #f2f1ed;
+  --surface-3:       #eae9e3;
   --text-primary:    #0b0b0b;
   --text-secondary:  #52514e;
-  --text-muted:      #898781;
-  --grid:            #e1e0d9;
+  /* #6b6962, not the reference palette's #898781: the surface here is pure
+     white and muted carries real small text — axis ticks, footnotes, the
+     detail-box labels — so it has to clear 4.5:1 on every light surface it
+     lands on, including the #eae9e3 step. #898781 measures 3.59:1 on white. */
+  --text-muted:      #6b6962;
+  --grid:            #e6e5de;
   --axis:            #c3c2b7;
-  --border:          rgba(11, 11, 11, 0.10);
-  --border-strong:   rgba(11, 11, 11, 0.18);
-  --ghost:           rgba(11, 11, 11, 0.045);
+  --border:          rgba(11, 11, 11, 0.09);
+  --border-strong:   rgba(11, 11, 11, 0.16);
+  --ghost:           rgba(11, 11, 11, 0.04);
+  --ghost-strong:    rgba(11, 11, 11, 0.07);
 
   /* categorical — slots 1 and 2 of the validated order */
   --series-1:        #2a78d6;
@@ -36,8 +44,15 @@
 
   /* ordinal ramps — one hue, monotone lightness, validated per mode.
      --ord-* is the 4-step backlog age ramp; --util-* the 5-step utilization
-     ramp. Both run light→dark on light and dark→light on dark, so "further
-     along the scale" always reads as further from the surface. */
+     ramp; --sev-* the 3-step severity ramp; --asr-* the same validated 3-step
+     ramp again, for assurance strength on the process tab. All run light→dark
+     on light and dark→light on dark, so "further along the scale" always reads
+     as further from the surface.
+     Severity is an ORDERED scale, which is why it takes a ramp rather than the
+     status palette: those four steps are a fixed scale for marking state on a
+     chip or a meter, and measured as a series set the serious and watch steps
+     sit at ΔE 13.6, under the normal-vision floor of 15. Status keeps the
+     chips; the charts take the ramp. */
   --ord-1:           #86b6ef;
   --ord-2:           #5598e7;
   --ord-3:           #256abf;
@@ -50,6 +65,9 @@
   --sev-watch:       #86b6ef;
   --sev-serious:     #2a78d6;
   --sev-critical:    #0d366b;
+  --asr-1:           #86b6ef;
+  --asr-2:           #2a78d6;
+  --asr-3:           #0d366b;
 
   /* status — fixed in both modes, never themed, never a series colour */
   --status-good:     #0ca30c;
@@ -58,23 +76,33 @@
   --status-critical: #d03b3b;
   --success-text:    #006300;
 
-  --shadow: 0 1px 2px rgba(11, 11, 11, 0.04);
+  /* type scale */
+  --t-2xs: 11px; --t-xs: 11.5px; --t-sm: 12.5px; --t-md: 13.5px;
+  --t-base: 14px; --t-lg: 16px; --t-xl: 20px; --t-2xl: 28px; --t-hero: 54px;
+
+  /* geometry & elevation */
+  --r-sm: 7px; --r-md: 10px; --r-lg: 13px; --r-pill: 999px;
+  --shadow-1: 0 1px 2px rgba(11, 11, 11, .04), 0 1px 1px rgba(11, 11, 11, .03);
+  --shadow-2: 0 2px 4px rgba(11, 11, 11, .05), 0 6px 16px -6px rgba(11, 11, 11, .10);
+  --ease: cubic-bezier(.2, .6, .2, 1);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:where(:not([data-theme="light"])) {
     color-scheme: dark;
-    --page:           #0d0d0d;
-    --surface-1:      #1a1a19;
+    --page:           #0c0c0c;
+    --surface-1:      #191918;
     --surface-2:      #232322;
+    --surface-3:      #2c2c2a;
     --text-primary:   #ffffff;
     --text-secondary: #c3c2b7;
-    --text-muted:     #898781;
+    --text-muted:     #92908a;
     --grid:           #2c2c2a;
-    --axis:           #383835;
+    --axis:           #3d3d3a;
     --border:         rgba(255, 255, 255, 0.10);
     --border-strong:  rgba(255, 255, 255, 0.20);
-    --ghost:          rgba(255, 255, 255, 0.06);
+    --ghost:          rgba(255, 255, 255, 0.05);
+    --ghost-strong:   rgba(255, 255, 255, 0.09);
     --series-1:       #3987e5;
     --series-2:       #d95926;
     --de-emphasis:    #898781;
@@ -90,24 +118,30 @@
     --sev-watch:      #184f95;
     --sev-serious:    #5598e7;
     --sev-critical:   #cde2fb;
+    --asr-1:          #184f95;
+    --asr-2:          #5598e7;
+    --asr-3:          #cde2fb;
     --success-text:   #0ca30c;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, .4);
+    --shadow-2: 0 2px 6px rgba(0, 0, 0, .45), 0 10px 24px -10px rgba(0, 0, 0, .6);
   }
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --page:           #0d0d0d;
-  --surface-1:      #1a1a19;
+  --page:           #0c0c0c;
+  --surface-1:      #191918;
   --surface-2:      #232322;
+  --surface-3:      #2c2c2a;
   --text-primary:   #ffffff;
   --text-secondary: #c3c2b7;
-  --text-muted:     #898781;
+  --text-muted:     #92908a;
   --grid:           #2c2c2a;
-  --axis:           #383835;
+  --axis:           #3d3d3a;
   --border:         rgba(255, 255, 255, 0.10);
   --border-strong:  rgba(255, 255, 255, 0.20);
-  --ghost:          rgba(255, 255, 255, 0.06);
+  --ghost:          rgba(255, 255, 255, 0.05);
+  --ghost-strong:   rgba(255, 255, 255, 0.09);
   --series-1:       #3987e5;
   --series-2:       #d95926;
   --de-emphasis:    #898781;
@@ -123,15 +157,19 @@
   --sev-watch:      #184f95;
   --sev-serious:    #5598e7;
   --sev-critical:   #cde2fb;
+  --asr-1:          #184f95;
+  --asr-2:          #5598e7;
+  --asr-3:          #cde2fb;
   --success-text:   #0ca30c;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, .4);
+  --shadow-2: 0 2px 6px rgba(0, 0, 0, .45), 0 10px 24px -10px rgba(0, 0, 0, .6);
 }
 
 /* ============================================================================
    BASE
    ========================================================================== */
 * { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
 /* An author `display` beats the user-agent's [hidden] rule, so anything given
    an explicit display (the legend row, the filter row) would stay on screen
    after being hidden. This puts that back. */
@@ -141,21 +179,19 @@ body {
   background: var(--page);
   color: var(--text-primary);
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  font-size: 14px;
+  font-size: var(--t-base);
   line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
-h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -0.01em; }
+h1, h2, h3, h4 { margin: 0; font-weight: 600; letter-spacing: -0.011em; }
 p { margin: 0; }
-:focus-visible {
-  outline: 2px solid var(--series-1);
-  outline-offset: 2px;
-  border-radius: 3px;
-}
+:focus-visible { outline: 2px solid var(--series-1); outline-offset: 2px; border-radius: 4px; }
 @media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
   * { transition: none !important; animation: none !important; }
 }
 
-.wrap { max-width: 1320px; margin: 0 auto; padding: 0 24px 72px; }
+.wrap { max-width: 1340px; margin: 0 auto; padding: 0 28px 80px; }
 .muted { color: var(--text-muted); }
 .secondary { color: var(--text-secondary); }
 .nums { font-variant-numeric: tabular-nums; }
@@ -163,149 +199,206 @@ p { margin: 0; }
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
+.skip {
+  position: absolute; left: 12px; top: -48px; z-index: 60;
+  background: var(--surface-1); color: var(--text-primary);
+  border: 1px solid var(--border-strong); border-radius: var(--r-sm);
+  padding: 9px 14px; font-size: var(--t-sm); font-weight: 600; text-decoration: none;
+  transition: top .16s var(--ease);
+}
+.skip:focus { top: 12px; }
 
 /* ============================================================================
-   HEADER · TABS · FILTERS
+   MASTHEAD
    ========================================================================== */
-.masthead { border-bottom: 1px solid var(--border); background: var(--surface-1); }
+.masthead { background: var(--surface-1); border-bottom: 1px solid var(--border); }
 .masthead-inner {
-  max-width: 1320px; margin: 0 auto; padding: 22px 24px 0;
-  display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start;
+  max-width: 1340px; margin: 0 auto; padding: 26px 28px 0;
+  display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-start;
 }
-.masthead-titles { flex: 1 1 420px; min-width: 0; }
-.masthead h1 { font-size: 21px; }
-.masthead .sub { color: var(--text-secondary); margin-top: 3px; font-size: 13px; }
-.masthead-meta {
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  padding-top: 2px;
-}
+.masthead-titles { flex: 1 1 440px; min-width: 0; }
+.masthead h1 { font-size: var(--t-xl); letter-spacing: -0.02em; }
+.masthead .sub { color: var(--text-secondary); margin-top: 4px; font-size: var(--t-md); }
+.masthead-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 3px; }
 .asof {
-  font-size: 12px; color: var(--text-secondary);
-  border: 1px solid var(--border); border-radius: 999px; padding: 4px 11px;
-  background: var(--surface-2); white-space: nowrap;
+  font-size: var(--t-sm); color: var(--text-secondary);
+  border: 1px solid var(--border); border-radius: var(--r-pill); padding: 5px 12px;
+  background: var(--surface-2); white-space: nowrap; font-variant-numeric: tabular-nums;
 }
 
 .synthetic {
-  margin: 16px 0 0; padding: 9px 14px; border-radius: 8px;
+  margin: 18px 0 0; padding: 11px 15px; border-radius: var(--r-md);
   background: var(--surface-2); border: 1px solid var(--border);
-  font-size: 12.5px; color: var(--text-secondary);
-  display: flex; gap: 9px; align-items: baseline;
+  font-size: var(--t-sm); color: var(--text-secondary);
+  display: flex; gap: 10px; align-items: baseline;
+  border-left: 3px solid var(--status-warning);
 }
-.synthetic strong { color: var(--text-primary); font-weight: 600; }
-
-.tabs {
-  display: flex; gap: 2px; margin-top: 18px;
-  border-bottom: 1px solid transparent;
-}
-.tab {
-  appearance: none; background: none; border: 0;
-  border-bottom: 2px solid transparent;
-  font: inherit; font-size: 13.5px; font-weight: 500;
-  color: var(--text-secondary); cursor: pointer;
-  padding: 9px 14px 11px; border-radius: 6px 6px 0 0;
-  transition: color .12s, background .12s;
-}
-.tab:hover { background: var(--ghost); color: var(--text-primary); }
-.tab[aria-selected="true"] {
-  color: var(--text-primary); border-bottom-color: var(--series-1); font-weight: 600;
-}
-
-/* One filter row, above everything it scopes. */
-.filters {
-  display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end;
-  padding: 16px 0 4px;
-}
-.field { display: flex; flex-direction: column; gap: 4px; }
-.field > span { font-size: 11.5px; color: var(--text-muted); letter-spacing: .02em; }
-.field select {
-  font: inherit; font-size: 13px; color: var(--text-primary);
-  background: var(--surface-1); border: 1px solid var(--border-strong);
-  border-radius: 7px; padding: 6px 9px; min-width: 152px; cursor: pointer;
-}
-.filter-note { flex: 1 1 auto; text-align: right; font-size: 12.5px; color: var(--text-muted); }
-.btn {
-  appearance: none; font: inherit; font-size: 12.5px; cursor: pointer;
-  background: var(--surface-1); color: var(--text-secondary);
-  border: 1px solid var(--border-strong); border-radius: 7px; padding: 6px 11px;
-  transition: background .12s, color .12s;
-}
-.btn:hover { background: var(--ghost); color: var(--text-primary); }
+.synthetic strong { color: var(--text-primary); font-weight: 600; white-space: nowrap; }
 
 /* ============================================================================
-   CARDS · SECTIONS
+   STICKY TOOLBAR — tabs and the one filter row travel together, so navigation
+   and scope stay reachable on a page this tall.
+   ========================================================================== */
+.toolbar {
+  background: color-mix(in srgb, var(--surface-1) 88%, transparent);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: saturate(1.4) blur(8px);
+  -webkit-backdrop-filter: saturate(1.4) blur(8px);
+}
+@media (min-width: 760px) { .toolbar { position: sticky; top: 0; z-index: 30; } }
+.toolbar-inner {
+  max-width: 1340px; margin: 0 auto; padding: 0 28px;
+  display: flex; flex-wrap: wrap; gap: 4px 28px; align-items: center;
+  justify-content: space-between; min-width: 0;
+}
+@media (max-width: 620px) { .toolbar-inner { padding: 0 18px; } .wrap { padding: 0 18px 80px; } .masthead-inner { padding: 20px 18px 0; } }
+
+/* Four tabs will not fit a phone on one line, and a scrolling strip hides
+   content behind a gesture — so they wrap. */
+.tabs { display: flex; gap: 0 2px; flex-wrap: wrap; min-width: 0; }
+.tab {
+  appearance: none; background: none; border: 0;
+  font: inherit; font-size: var(--t-md); font-weight: 500;
+  color: var(--text-secondary); cursor: pointer;
+  padding: 15px 2px 13px; margin: 0 12px; position: relative;
+  transition: color .14s var(--ease);
+  white-space: nowrap;
+}
+.tab:first-child { margin-left: 0; }
+.tab::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
+  background: var(--series-1); border-radius: 2px 2px 0 0;
+  transform: scaleX(0); transform-origin: center;
+  transition: transform .18s var(--ease);
+}
+.tab:hover { color: var(--text-primary); }
+.tab[aria-selected="true"] { color: var(--text-primary); font-weight: 600; }
+.tab[aria-selected="true"]::after { transform: scaleX(1); }
+
+.filters { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; padding: 8px 0; }
+.field { display: inline-flex; align-items: center; gap: 6px; }
+.field > span { font-size: var(--t-2xs); color: var(--text-muted); letter-spacing: .02em; text-transform: uppercase; }
+.field select, .qact select {
+  font: inherit; font-size: var(--t-sm); color: var(--text-primary);
+  background: var(--surface-1); border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm); padding: 6px 9px; cursor: pointer;
+  transition: border-color .14s var(--ease), background .14s var(--ease);
+}
+.field select { min-width: 140px; }
+.field select:hover, .qact select:hover { border-color: var(--series-1); }
+.filter-note {
+  font-size: var(--t-sm); color: var(--text-muted); flex: 1 1 100%;
+  text-align: right; font-variant-numeric: tabular-nums; padding-bottom: 8px;
+}
+@media (max-width: 1080px) { .filter-note { text-align: left; } }
+
+.btn {
+  appearance: none; font: inherit; font-size: var(--t-sm); font-weight: 500; cursor: pointer;
+  background: var(--surface-1); color: var(--text-secondary);
+  border: 1px solid var(--border-strong); border-radius: var(--r-sm); padding: 6px 12px;
+  transition: background .14s var(--ease), color .14s var(--ease), border-color .14s var(--ease);
+}
+.btn:hover { background: var(--ghost-strong); color: var(--text-primary); border-color: var(--series-1); }
+.btn:active { background: var(--surface-3); }
+.btn-sm { font-size: var(--t-2xs); padding: 4px 10px; }
+
+/* ============================================================================
+   CARDS & SECTIONS
    ========================================================================== */
 .card {
   background: var(--surface-1); border: 1px solid var(--border);
-  border-radius: 10px; padding: 18px 20px 16px; box-shadow: var(--shadow);
+  border-radius: var(--r-lg); padding: 20px 22px 18px; box-shadow: var(--shadow-1);
 }
-.section-head { margin: 30px 0 12px; }
-.section-head h2 { font-size: 15.5px; }
-.section-head p { font-size: 12.5px; color: var(--text-secondary); margin-top: 3px; max-width: 78ch; }
-.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-@media (max-width: 900px) { .grid-2 { grid-template-columns: minmax(0, 1fr); } }
+.fig { transition: box-shadow .18s var(--ease), border-color .18s var(--ease); }
+.fig:hover { box-shadow: var(--shadow-2); border-color: var(--border-strong); }
+
+.section-head { margin: 36px 0 14px; }
+.section-head .eyebrow {
+  font-size: var(--t-2xs); font-weight: 600; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px;
+}
+.section-head h2 { font-size: var(--t-lg); }
+.section-head p { font-size: var(--t-sm); color: var(--text-secondary); margin-top: 5px; max-width: 82ch; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+@media (max-width: 980px) { .grid-2 { grid-template-columns: minmax(0, 1fr); } }
 
 /* ============================================================================
-   HERO · KPI TILES
+   HERO & KPI TILES
    ========================================================================== */
 .hero {
-  display: flex; flex-wrap: wrap; gap: 22px 40px; align-items: flex-start;
-  margin-top: 20px;
+  display: flex; flex-wrap: wrap; gap: 20px 48px; align-items: flex-start;
+  margin-top: 24px; padding: 24px 26px 20px;
 }
-.hero-figure { flex: 0 0 auto; }
-.hero-figure .label { font-size: 12.5px; color: var(--text-secondary); }
+/* 0 1 auto, not 0 0 auto: the foot line is long, and an unshrinkable flex item
+   takes its max-content width as a floor, which pushed a phone into
+   horizontal scroll. */
+.hero-figure { flex: 0 1 auto; min-width: 0; }
+.hero-figure .label {
+  font-size: var(--t-2xs); font-weight: 600; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--text-muted);
+}
 .hero-figure .value {
-  font-size: 56px; line-height: 1.03; font-weight: 600; letter-spacing: -0.03em;
-  margin-top: 2px;
+  font-size: var(--t-hero); line-height: 1.02; font-weight: 600;
+  letter-spacing: -0.035em; margin-top: 6px;
 }
-.hero-figure .foot { font-size: 12.5px; color: var(--text-muted); margin-top: 4px; }
-.hero-split { flex: 1 1 340px; display: flex; flex-wrap: wrap; gap: 10px 26px; align-self: flex-end; }
-.hero-split .cell { min-width: 108px; }
-.hero-split .cell .n { font-size: 20px; font-weight: 600; }
-.hero-split .cell .k { font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
+.hero-figure .foot { font-size: var(--t-sm); color: var(--text-muted); margin-top: 6px; max-width: 46ch; }
+.hero-split { flex: 1 1 320px; display: flex; flex-wrap: wrap; gap: 14px 32px; align-self: center; }
+.hero-split .cell { min-width: 104px; }
+.hero-split .cell .n { font-size: var(--t-2xl); font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; }
+.hero-split .cell .k { margin-top: 4px; }
+.hero-note {
+  flex: 1 1 100%; font-size: var(--t-sm); color: var(--text-secondary);
+  border-top: 1px solid var(--grid); padding-top: 14px; margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
 
-.kpis {
-  display: grid; gap: 14px; margin-top: 18px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+.kpis { display: grid; gap: 16px; margin-top: 18px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.kpis-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 1080px) { .kpis, .kpis-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px)  { .kpis, .kpis-4 { grid-template-columns: minmax(0, 1fr); } }
+.kpi { display: flex; flex-direction: column; padding: 18px 20px 16px; }
+.kpi .k { font-size: var(--t-sm); color: var(--text-secondary); font-weight: 500; }
+.kpi .v { font-size: var(--t-2xl); font-weight: 600; letter-spacing: -0.022em; line-height: 1.2; margin-top: 4px; }
+.kpi .d { font-size: var(--t-xs); color: var(--text-muted); display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.kpi .d .delta {
+  font-weight: 600; font-variant-numeric: tabular-nums;
+  background: var(--surface-2); border-radius: var(--r-pill); padding: 2px 8px;
 }
-@media (max-width: 1080px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 620px)  { .kpis { grid-template-columns: minmax(0, 1fr); } }
-.kpi { display: flex; flex-direction: column; gap: 2px; }
-.kpi .k { font-size: 12.5px; color: var(--text-secondary); }
-.kpi .v { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; }
-.kpi .d { font-size: 12px; color: var(--text-muted); display: flex; align-items: baseline; gap: 5px; }
-.kpi .d .delta { font-weight: 600; }
-.kpi .d .delta.good { color: var(--success-text); }
-.kpi .d .delta.bad  { color: var(--status-critical); }
-.kpi .spark { margin-top: 8px; }
-.kpi .note { font-size: 11.5px; color: var(--text-muted); margin-top: 6px; }
+.kpi .d .delta.good { color: var(--success-text); background: color-mix(in oklab, var(--status-good) 12%, var(--surface-1)); }
+.kpi .d .delta.bad  { color: var(--status-critical); background: color-mix(in oklab, var(--status-critical) 12%, var(--surface-1)); }
+.kpi .spark { margin-top: 10px; }
+.kpi .note { font-size: var(--t-xs); color: var(--text-muted); margin-top: 8px; line-height: 1.45; }
 
 /* ============================================================================
    FIGURE (chart card) — every chart has a table-view twin
    ========================================================================== */
 .fig { display: flex; flex-direction: column; }
-.fig-head { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 2px; }
+.fig-head { display: flex; gap: 14px; align-items: flex-start; }
 .fig-head .t { flex: 1 1 auto; min-width: 0; }
-.fig-head h3 { font-size: 13.5px; }
-.fig-head .s { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+.fig-head h3 { font-size: var(--t-md); }
+.fig-head .s { font-size: var(--t-sm); color: var(--text-secondary); margin-top: 3px; }
 .viewtoggle {
-  display: inline-flex; flex: 0 0 auto; border: 1px solid var(--border-strong);
-  border-radius: 7px; overflow: hidden; background: var(--surface-1);
+  display: inline-flex; flex: 0 0 auto; padding: 2px; gap: 2px;
+  border-radius: var(--r-sm); background: var(--surface-2); border: 1px solid var(--border);
 }
 .viewtoggle button {
-  appearance: none; border: 0; background: none; font: inherit; font-size: 11.5px;
-  padding: 4px 9px; cursor: pointer; color: var(--text-secondary);
-  transition: background .12s, color .12s;
+  appearance: none; border: 0; background: none; font: inherit; font-size: var(--t-2xs);
+  font-weight: 500; padding: 4px 10px; cursor: pointer; color: var(--text-secondary);
+  border-radius: 5px; transition: background .14s var(--ease), color .14s var(--ease);
 }
-.viewtoggle button:hover { background: var(--ghost); }
-.viewtoggle button[aria-pressed="true"] { background: var(--surface-2); color: var(--text-primary); font-weight: 600; }
+.viewtoggle button:hover { color: var(--text-primary); }
+.viewtoggle button[aria-pressed="true"] {
+  background: var(--surface-1); color: var(--text-primary); font-weight: 600;
+  box-shadow: var(--shadow-1);
+}
 
-.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 8px 0 2px; }
-.legend .item { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
-.legend .swatch { width: 11px; height: 11px; border-radius: 2px; flex: 0 0 auto; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 12px 0 2px; }
+.legend .item { display: inline-flex; align-items: center; gap: 7px; font-size: var(--t-xs); color: var(--text-secondary); }
+.legend .swatch { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; }
 .legend .line-key { width: 14px; height: 2px; border-radius: 1px; flex: 0 0 auto; }
-.legend .glyph { font-size: 11px; line-height: 1; }
+.legend .glyph { font-size: var(--t-2xs); line-height: 1; }
 
-.plot { margin-top: 6px; position: relative; }
+.plot { margin-top: 10px; position: relative; }
 .plot svg { display: block; width: 100%; height: auto; }
 /* Charts are keyboard-reachable: every hit band is a tab stop and shows on
    focus exactly what it shows on hover. */
@@ -313,155 +406,181 @@ p { margin: 0; }
 .plot g.band:focus { outline: none; }
 .plot g.band:focus-visible { outline: 2px solid var(--series-1); outline-offset: -3px; }
 
-.fig-foot { font-size: 11.5px; color: var(--text-muted); margin-top: 8px; }
+.fig-foot { font-size: var(--t-xs); color: var(--text-muted); margin-top: 12px; line-height: 1.5; }
 
-/* Table twin */
-.tablewrap { margin-top: 8px; overflow-x: auto; }
-table.data { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+/* ============================================================================
+   TABLES
+   ========================================================================== */
+.tablewrap { margin-top: 12px; overflow: auto; border-radius: var(--r-sm); }
+.tablewrap::-webkit-scrollbar { height: 10px; width: 10px; }
+.tablewrap::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: var(--r-pill); }
+.tablewrap::-webkit-scrollbar-track { background: transparent; }
+table.data { border-collapse: separate; border-spacing: 0; width: 100%; font-size: var(--t-sm); }
 table.data th, table.data td {
-  text-align: left; padding: 6px 10px 6px 0; border-bottom: 1px solid var(--grid);
+  text-align: left; padding: 8px 14px 8px 0; border-bottom: 1px solid var(--grid);
   white-space: nowrap;
 }
 table.data th {
-  font-weight: 600; color: var(--text-secondary); font-size: 11.5px;
-  position: sticky; top: 0; background: var(--surface-1);
+  font-weight: 600; color: var(--text-secondary); font-size: var(--t-2xs);
+  letter-spacing: .03em; text-transform: uppercase;
+  position: sticky; top: 0; background: var(--surface-1); z-index: 1;
+  border-bottom-color: var(--border-strong);
 }
-table.data td.num, table.data th.num { text-align: right; font-variant-numeric: tabular-nums; padding-right: 14px; }
+table.data td.num, table.data th.num { text-align: right; font-variant-numeric: tabular-nums; padding-right: 16px; }
+table.data tbody tr { transition: background .1s var(--ease); }
 table.data tbody tr:hover { background: var(--ghost); }
 table.data tbody tr:last-child td { border-bottom: 0; }
 
-/* Sortable detail tables */
 .sortbtn {
-  appearance: none; background: none; border: 0; font: inherit; font-size: 11.5px;
-  font-weight: 600; color: var(--text-secondary); cursor: pointer; padding: 0;
-  display: inline-flex; align-items: center; gap: 4px;
+  appearance: none; background: none; border: 0; font: inherit; font-size: var(--t-2xs);
+  font-weight: 600; letter-spacing: .03em; text-transform: uppercase;
+  color: var(--text-secondary); cursor: pointer; padding: 0;
+  display: inline-flex; align-items: center; gap: 5px;
 }
 .sortbtn:hover { color: var(--text-primary); }
-.sortbtn .arrow { font-size: 9px; color: var(--text-muted); }
+.sortbtn .arrow { font-size: 8px; color: var(--series-1); }
 .sortbtn[aria-sort-active="true"] { color: var(--text-primary); }
-.sortbtn[aria-sort-active="true"] .arrow { color: var(--series-1); }
 .rowtoggle {
   appearance: none; background: none; border: 0; font: inherit; cursor: pointer;
-  color: var(--text-primary); padding: 0; text-align: left; font-size: 12.5px;
-  font-variant-numeric: tabular-nums; text-decoration: underline;
-  text-decoration-color: var(--border-strong); text-underline-offset: 3px;
+  color: var(--text-primary); padding: 0; text-align: left; font-size: var(--t-sm);
+  font-variant-numeric: tabular-nums; font-weight: 500;
+  text-decoration: underline; text-decoration-color: var(--border-strong);
+  text-underline-offset: 3px; transition: text-decoration-color .14s var(--ease);
 }
 .rowtoggle:hover { text-decoration-color: var(--series-1); }
-tr.detail > td { padding: 0 0 14px; white-space: normal; }
+tr.detail > td { padding: 0 0 16px; white-space: normal; }
 .detailbox {
-  background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px;
-  padding: 12px 14px; display: grid; gap: 14px;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-md);
+  padding: 14px 16px; display: grid; gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(min(270px, 100%), 1fr));
 }
-.detailbox h4 { margin: 0 0 6px; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); }
-.detailbox ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
-.detailbox li { font-size: 12px; color: var(--text-secondary); display: flex; gap: 8px; }
+.detailbox h4 {
+  margin: 0 0 8px; font-size: var(--t-2xs); font-weight: 600; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--text-muted);
+}
+.detailbox ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 7px; }
+.detailbox li { font-size: var(--t-xs); color: var(--text-secondary); display: flex; gap: 9px; line-height: 1.45; }
 .detailbox li .ref { color: var(--text-muted); flex: 0 0 auto; font-variant-numeric: tabular-nums; }
-.detailbox .kv { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
-.detailbox .kv span:last-child { font-variant-numeric: tabular-nums; color: var(--text-primary); }
+.detailbox .kv { display: flex; justify-content: space-between; gap: 14px; font-size: var(--t-xs); padding: 2px 0; }
+.detailbox .kv span:first-child { color: var(--text-secondary); }
+.detailbox .kv span:last-child { font-variant-numeric: tabular-nums; color: var(--text-primary); font-weight: 500; text-align: right; }
+tr.row-focus > td {
+  background: var(--surface-2);
+  background: color-mix(in oklab, var(--series-1) 12%, var(--surface-1));
+  box-shadow: inset 3px 0 0 var(--series-1);
+}
 
 /* ============================================================================
    STATUS CHIPS — status colour never travels alone; icon + label always
    ========================================================================== */
 .chip {
-  display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto;
-  font-size: 11px; font-weight: 600; letter-spacing: .02em;
-  padding: 2px 8px 2px 6px; border-radius: 999px;
+  display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto;
+  font-size: var(--t-2xs); font-weight: 600; letter-spacing: .015em;
+  padding: 3px 9px 3px 7px; border-radius: var(--r-pill);
   background: var(--surface-2); border: 1px solid var(--border);
   color: var(--text-primary); white-space: nowrap;
 }
-.chip .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
-.chip .icon { font-size: 10px; line-height: 1; }
+.chip .dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; }
+.chip .icon { font-size: 9px; line-height: 1; color: var(--text-secondary); }
 .chip.critical .dot { background: var(--status-critical); }
 .chip.serious  .dot { background: var(--status-serious); }
 .chip.watch    .dot { background: var(--status-warning); }
+.chip.warning  .dot { background: var(--status-warning); }
 .chip.good     .dot { background: var(--status-good); }
 
 /* ============================================================================
    ACTION QUEUE
    ========================================================================== */
-.queue { display: flex; flex-direction: column; }
+.queue { display: flex; flex-direction: column; padding: 6px 22px 16px; }
 .qrow {
-  display: grid; gap: 4px 16px; padding: 12px 2px;
-  grid-template-columns: 104px minmax(0, 1fr) auto;
+  display: grid; gap: 5px 18px; padding: 15px 2px 15px 14px;
+  grid-template-columns: 108px minmax(0, 1fr) auto;
   border-top: 1px solid var(--grid); align-items: baseline;
+  position: relative; transition: background .12s var(--ease);
 }
+.qrow::before {
+  content: ""; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px;
+  border-radius: var(--r-pill); background: var(--grid);
+}
+.qrow.sev-critical::before { background: var(--status-critical); }
+.qrow.sev-serious::before  { background: var(--status-serious); }
+.qrow.sev-watch::before    { background: var(--status-warning); }
+.qrow:hover { background: var(--ghost); }
 .qrow:first-child { border-top: 0; }
-.qrow .qtitle { font-size: 13px; font-weight: 600; }
-.qrow .qwhy { font-size: 12.5px; color: var(--text-secondary); grid-column: 2 / -1; max-width: 88ch; }
-.qrow .qmeta { font-size: 11.5px; color: var(--text-muted); grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.qrow .qtitle { font-size: var(--t-md); font-weight: 600; }
+.qrow .drill {
+  appearance: none; background: none; border: 0; padding: 0; font: inherit;
+  font-size: var(--t-md); font-weight: 600; color: var(--text-primary); cursor: pointer;
+  text-align: left; text-decoration: underline;
+  text-decoration-color: var(--border-strong); text-underline-offset: 3px;
+  transition: text-decoration-color .14s var(--ease);
+}
+.qrow .drill:hover { text-decoration-color: var(--series-1); }
+.qrow .qwhy { font-size: var(--t-sm); color: var(--text-secondary); grid-column: 2 / -1; max-width: 92ch; line-height: 1.55; }
+.qrow .qmeta {
+  font-size: var(--t-xs); color: var(--text-muted); grid-column: 2 / -1;
+  display: flex; flex-wrap: wrap; gap: 3px 16px; margin-top: 2px;
+}
 .qrow .qmeta .cite { font-variant-numeric: tabular-nums; }
-.qrow .qval { font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
 .qrow .qmeta .overdue { color: var(--status-critical); font-weight: 600; }
+.qrow .qval { font-size: var(--t-sm); font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
 .qrow .qact {
   grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
-  margin-top: 4px;
+  margin-top: 8px;
 }
-.qrow .qact > .muted { font-size: 11.5px; }
-.qrow .qact select {
-  font: inherit; font-size: 12px; color: var(--text-primary);
-  background: var(--surface-1); border: 1px solid var(--border-strong);
-  border-radius: 6px; padding: 3px 7px; cursor: pointer;
-}
-.btn-sm { font-size: 12px; padding: 3px 9px; }
-.hero-note {
-  flex: 1 1 100%; font-size: 12.5px; color: var(--text-secondary);
-  border-top: 1px solid var(--grid); padding-top: 12px; margin-top: 2px;
-}
-@media (max-width: 640px) {
+.qrow .qact > .muted { font-size: var(--t-2xs); text-transform: uppercase; letter-spacing: .04em; }
+@media (max-width: 700px) {
   .qrow { grid-template-columns: minmax(0, 1fr); }
   .qrow .qwhy, .qrow .qmeta, .qrow .qact { grid-column: 1; }
   .qrow .qval { text-align: left; }
 }
-.qrow .drill {
-  appearance: none; background: none; border: 0; padding: 0; font: inherit;
-  font-size: 13px; font-weight: 600; color: var(--text-primary); cursor: pointer;
-  text-align: left; text-decoration: underline;
-  text-decoration-color: var(--border-strong); text-underline-offset: 3px;
-}
-.qrow .drill:hover { text-decoration-color: var(--series-1); }
-tr.row-focus > td {
-  background: var(--surface-2);
-  background: color-mix(in oklab, var(--series-1) 14%, var(--surface-1));
-  box-shadow: inset 2px 0 0 var(--series-1);
-}
-.queue-more { margin-top: 12px; }
-.queue-empty { padding: 22px 2px; color: var(--text-secondary); font-size: 13px; }
+.queue-more { margin-top: 16px; padding-top: 4px; }
+.queue-empty { padding: 28px 2px; color: var(--text-secondary); font-size: var(--t-md); }
 
 /* ============================================================================
    AUDIT READINESS — meters
    ========================================================================== */
-.meters { display: grid; gap: 20px 34px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); margin-top: 6px; }
-.meter .top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
-.meter .name { font-size: 12.5px; color: var(--text-secondary); }
-.meter .pct { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.meters { display: grid; gap: 22px 36px; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); margin-top: 6px; }
+.meter .top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.meter .name { font-size: var(--t-sm); color: var(--text-secondary); font-weight: 500; }
+.meter .pct { font-size: var(--t-lg); font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 /* The unfilled track is a lighter step of the fill's own ramp, so the meter's
    state reads across the whole bar. --surface-2 is the fallback where
    color-mix() is unavailable. */
 .meter .track {
-  height: 6px; border-radius: 3px; margin-top: 6px; overflow: hidden;
+  height: 7px; border-radius: var(--r-pill); margin-top: 8px; overflow: hidden;
   background: var(--surface-2);
   background: var(--meter-track, var(--surface-2));
 }
-.meter .fill { height: 100%; border-radius: 3px; background: var(--meter-fill); }
-.meter .foot { font-size: 11.5px; color: var(--text-muted); margin-top: 7px; display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
+.meter .fill { height: 100%; border-radius: var(--r-pill); background: var(--meter-fill); }
+.meter .foot {
+  font-size: var(--t-xs); color: var(--text-muted); margin-top: 9px;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+}
 
 /* ============================================================================
    TOOLTIP — one floating node, reused; text inserted with textContent only
    ========================================================================== */
 #tip {
   position: fixed; z-index: 40; pointer-events: none; opacity: 0;
-  transform: translate(-50%, -100%); transition: opacity .1s;
+  transform: translate(-50%, -100%); transition: opacity .1s var(--ease);
   background: var(--surface-1); border: 1px solid var(--border-strong);
-  border-radius: 8px; padding: 8px 10px; box-shadow: 0 4px 14px rgba(0,0,0,.14);
-  font-size: 12px; max-width: 280px;
+  border-radius: var(--r-md); padding: 10px 12px; box-shadow: var(--shadow-2);
+  font-size: var(--t-xs); max-width: 290px;
 }
 #tip[data-show="1"] { opacity: 1; }
-#tip .tip-title { font-size: 11.5px; color: var(--text-secondary); margin-bottom: 5px; }
-#tip .tip-row { display: flex; align-items: baseline; gap: 8px; margin-top: 3px; }
-#tip .tip-key { width: 14px; height: 2px; border-radius: 1px; flex: 0 0 auto; transform: translateY(-3px); }
+#tip .tip-title { font-size: var(--t-2xs); color: var(--text-muted); margin-bottom: 6px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; }
+#tip .tip-row { display: flex; align-items: baseline; gap: 9px; margin-top: 4px; }
+#tip .tip-key { width: 12px; height: 2px; border-radius: 1px; flex: 0 0 auto; transform: translateY(-3px); }
 #tip .tip-val { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-primary); }
 #tip .tip-name { color: var(--text-secondary); }
+
+/* ============================================================================
+   FOOTNOTES
+   ========================================================================== */
+.notes { margin-top: 44px; font-size: var(--t-xs); color: var(--text-muted); max-width: 96ch; line-height: 1.6; }
+.notes h2 { font-size: var(--t-2xs); color: var(--text-secondary); margin-bottom: 8px; letter-spacing: .06em; text-transform: uppercase; }
+.notes p { margin-bottom: 9px; }
 
 /* ============================================================================
    PRINT
@@ -475,26 +594,27 @@ tr.row-focus > td {
 @media print {
   :root, :root[data-theme="dark"] {
     color-scheme: light;
-    --page: #ffffff; --surface-1: #ffffff; --surface-2: #f2f1ed;
+    --page: #ffffff; --surface-1: #ffffff; --surface-2: #f2f1ed; --surface-3: #eae9e3;
     --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #6b6a66;
     --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,.28);
-    --border-strong: rgba(11,11,11,.4); --ghost: transparent;
+    --border-strong: rgba(11,11,11,.4); --ghost: transparent; --ghost-strong: transparent;
     --series-1: #2a78d6; --series-2: #eb6834; --de-emphasis: #898781;
     --ord-1: #86b6ef; --ord-2: #5598e7; --ord-3: #256abf; --ord-4: #0d366b;
     --util-1: #86b6ef; --util-2: #5598e7; --util-3: #2a78d6; --util-4: #1c5cab; --util-5: #0d366b;
     --sev-watch: #86b6ef; --sev-serious: #2a78d6; --sev-critical: #0d366b;
-    --success-text: #006300; --shadow: none;
+    --asr-1: #86b6ef; --asr-2: #2a78d6; --asr-3: #0d366b;
+    --success-text: #006300; --shadow-1: none; --shadow-2: none;
   }
   @page { margin: 14mm; }
   body { background: #fff; font-size: 10.5pt; }
   .wrap { max-width: none; padding: 0; }
-  .masthead { border: 0; }
-  .masthead-inner { padding: 0; max-width: none; }
+  .masthead, .toolbar { border: 0; background: none; position: static; backdrop-filter: none; }
+  .masthead-inner, .toolbar-inner { padding: 0; max-width: none; }
 
   /* Controls do nothing on paper. */
-  #theme-toggle, .tabs, .filters, .viewtoggle, .queue-more button,
-  .qrow .qact, .sortbtn .arrow, #tip { display: none !important; }
-  .printonly { display: block; font-size: 9.5pt; color: var(--text-secondary); margin-top: 10px; }
+  #theme-toggle, .tabs, .filters, .toolbar, .viewtoggle, .queue-more button,
+  .qrow .qact, .sortbtn .arrow, .skip, #tip { display: none !important; }
+  .printonly { display: block; font-size: 9.5pt; color: var(--text-secondary); margin-top: 12px; }
 
   /* Never split a record across a page. */
   .card, .qrow, .meter, .kpi, .fig, tr, .detailbox { break-inside: avoid; page-break-inside: avoid; }
@@ -505,67 +625,68 @@ tr.row-focus > td {
   table.data th { position: static; }
 
   .card { border-color: rgba(11,11,11,.28); box-shadow: none; }
+  .fig:hover { box-shadow: none; }
   .grid-2 { display: block; }
   .grid-2 > .card { margin-bottom: 12px; }
-  .kpis { grid-template-columns: repeat(3, 1fr); }
+  .kpis, .kpis-4 { grid-template-columns: repeat(3, 1fr); }
   a[href]::after { content: ""; }
 }
-
-/* ============================================================================
-   FOOTNOTES
-   ========================================================================== */
-.notes { margin-top: 34px; font-size: 12px; color: var(--text-muted); max-width: 92ch; }
-.notes h2 { font-size: 12.5px; color: var(--text-secondary); margin-bottom: 6px; }
-.notes p { margin-bottom: 7px; }
 </style>
 </head>
 <body>
+
+<a class="skip" href="#main-content">Skip to dashboard content</a>
 
 <header class="masthead">
   <div class="masthead-inner">
     <div class="masthead-titles">
       <h1>Trade compliance posture</h1>
-      <p class="sub">Export authorizations and classification of record &mdash; ITAR (22 CFR 120&ndash;130) and EAR (15 CFR 730&ndash;774)</p>
+      <p class="sub">Export authorizations, classification of record and process compliance &mdash; ITAR (22 CFR 120&ndash;130) and EAR (15 CFR 730&ndash;774)</p>
     </div>
     <div class="masthead-meta">
       <span class="asof" id="asof-chip"></span>
-      <button class="btn" id="theme-toggle" type="button" aria-live="polite">Dark theme</button>
+      <button class="btn" id="theme-toggle" type="button">Dark theme</button>
     </div>
   </div>
   <div class="masthead-inner" style="padding-top:0">
     <div style="flex:1 1 100%">
       <p class="synthetic">
         <strong>Proof of concept.</strong>
-        <span>Every program, part number, authorization number, foreign party and determination on this page is synthetic and generated in the browser. Nothing here is a compliance record.</span>
+        <span>Every program, part number, authorization number, foreign party, determination and audit result on this page is synthetic and generated in the browser. Nothing here is a compliance record.</span>
       </p>
       <p class="printonly" id="print-scope"></p>
-      <div class="tabs" role="tablist" aria-label="Dashboard views">
-        <button class="tab" role="tab" id="tab-posture" aria-controls="view-posture" aria-selected="true" type="button">Posture</button>
-        <button class="tab" role="tab" id="tab-auth" aria-controls="view-auth" aria-selected="false" type="button">Authorizations</button>
-        <button class="tab" role="tab" id="tab-class" aria-controls="view-class" aria-selected="false" type="button">Classification</button>
-      </div>
     </div>
   </div>
 </header>
 
-<main class="wrap">
-  <!-- One filter row, above everything it scopes. Every tile, chart, queue row
-       and table below re-derives against the same slice. -->
-  <div class="filters" id="filters">
-    <label class="field"><span>Program</span><select id="f-program"></select></label>
-    <label class="field"><span>Site</span><select id="f-site"></select></label>
-    <label class="field"><span>Regime</span><select id="f-regime"></select></label>
-    <button class="btn" id="f-reset" type="button" hidden>Clear filters</button>
-    <p class="filter-note" id="filter-note"></p>
+<!-- One filter row, above everything it scopes, travelling with the tabs. -->
+<div class="toolbar">
+  <div class="toolbar-inner">
+    <div class="tabs" role="tablist" aria-label="Dashboard views">
+      <button class="tab" role="tab" id="tab-posture" aria-controls="view-posture" aria-selected="true" type="button">Posture</button>
+      <button class="tab" role="tab" id="tab-auth" aria-controls="view-auth" aria-selected="false" type="button">Authorizations</button>
+      <button class="tab" role="tab" id="tab-class" aria-controls="view-class" aria-selected="false" type="button">Classification</button>
+      <button class="tab" role="tab" id="tab-process" aria-controls="view-process" aria-selected="false" type="button">Process compliance</button>
+    </div>
+    <div class="filters" id="filters">
+      <label class="field"><span>Program</span><select id="f-program"></select></label>
+      <label class="field"><span>Site</span><select id="f-site"></select></label>
+      <label class="field"><span>Regime</span><select id="f-regime"></select></label>
+      <button class="btn btn-sm" id="f-reset" type="button" hidden>Clear</button>
+      <p class="filter-note" id="filter-note"></p>
+    </div>
   </div>
+</div>
 
+<main class="wrap" id="main-content">
   <section id="view-posture" role="tabpanel" aria-labelledby="tab-posture"></section>
   <section id="view-auth" role="tabpanel" aria-labelledby="tab-auth" hidden></section>
   <section id="view-class" role="tabpanel" aria-labelledby="tab-class" hidden></section>
+  <section id="view-process" role="tabpanel" aria-labelledby="tab-process" hidden></section>
 
   <div class="notes">
     <h2>Notes</h2>
-    <p><strong>Citations locate the obligation; they are not legal advice.</strong> The thresholds applied here &mdash; 85% value utilization, a 90-day expiry window, a 90-day classification service level and a 3-year re-review cycle &mdash; are illustrative internal policy settings, not regulatory deadlines. Recordkeeping references are 22 CFR 122.5 (ITAR, five years) and 15 CFR 762 (EAR, five years); the disclosure reference is 22 CFR 127.12.</p>
+    <p><strong>Citations locate the obligation; they are not legal advice.</strong> The thresholds applied here &mdash; 85% value utilization, a 90-day expiry window, a 120-day renewal lead time, a 90-day classification service level, a 3-year re-review cycle and a 95% control conformance target &mdash; are illustrative internal policy settings, not regulatory deadlines. Recordkeeping references are 22 CFR 122.5 (ITAR, five years) and 15 CFR 762 (EAR, five years); licence conditions are 22 CFR 127.1 and the disclosure reference is 22 CFR 127.12.</p>
     <p id="note-scope"></p>
   </div>
 </main>
@@ -594,6 +715,7 @@ const POLICY = {
   ADJUDICATION_NORMAL_DAYS: 60,        // expected licensing decision window
   TURNAROUND_TRAILING_DAYS: 90,        // window for the median turnaround measure
   RENEWAL_LEAD_DAYS:        120,       // when a replacement application should be in
+  CONFORMANCE_TARGET:       0.95,      // internal target for SOP control conformance
 };
 
 /* How long an action may sit after the condition arose before it is overdue.
@@ -657,11 +779,12 @@ function groupBy(xs, key) {
    Everything below this banner exists only to stand up the page without a
    back end. It ends at the matching END banner and exposes exactly one object:
 
-     DATA = { asOf: Date, authorizations: Authorization[], classifications: Part[] }
+     DATA = { asOf, authorizations: Authorization[], classifications: Part[],
+              controls: Control[] }
 
    Point DATA at a real feed — SAP GTS, Descartes, OCR, or an internal export
    management system — and every derivation, chart, table and action rule below
-   this section works unchanged. The two schemas are the integration contract:
+   this section works unchanged. The three schemas are the integration contract:
 
    ── Authorization ──────────────────────────────────────────────────────────
      id                  string   authorization / agreement number, as issued
@@ -710,6 +833,28 @@ function groupBy(xs, key) {
      itemsReconciledOn   Date|null  temporary exports only: date items were reconciled
                                     as returned. null on an expired temporary
                                     authorization is the critical case.
+
+   ── Control (an SOP step under test) ───────────────────────────────────────
+     id            string   e.g. 'SOP-07.2'
+     sop           string   procedure key, e.g. 'SOP-07'
+     sopTitle      string   plain title of the procedure
+     step          string   the control statement being tested
+     owner         string   process owner
+     method        string   'Automated' | 'Manual sample'
+     frequency     string   'Continuous' | 'Quarterly' | 'Semi-annual' | 'Annual'
+     lastTestedOn  Date|null   null means never tested
+     testedBy      string|null
+     sampleSize    number|null  manual tests only: transactions examined
+     passed        number|null  manual tests only: transactions conforming
+     measure       string|null  automated tests only: key into AUTOMATED_MEASURES,
+                                which derives population and failures from the
+                                record set. An automated control is therefore
+                                tested continuously against the whole
+                                population rather than a sample, and its
+                                evidence is the data itself.
+     findings      [{ id, note, raisedOn: Date, dueOn: Date,
+                      closedOn: Date|null, owner: string }]
+                                corrective actions raised by a failed test
 
    ── Part (jurisdiction & classification determination) ─────────────────────
      partNumber          string   item-master key
@@ -1111,6 +1256,87 @@ const DATA = (function buildMockData() {
     };
   }
 
+  /* ---- Controls (SOP steps under test) ------------------------------------
+     An automated control names a `measure` and is evaluated continuously
+     against the whole population; a manual control carries the result of a
+     periodic sample. Both shapes land in the same list, so a procedure can be
+     part automated and part sampled — which is what a real compliance program
+     looks like mid-automation. */
+  const SOPS = [
+    { sop: 'SOP-03', sopTitle: 'Jurisdiction and classification of the item master' },
+    { sop: 'SOP-07', sopTitle: 'Authorization management and provisos' },
+    { sop: 'SOP-11', sopTitle: 'Export release and screening at the dock' },
+    { sop: 'SOP-14', sopTitle: 'Recordkeeping and retention' },
+    { sop: 'SOP-19', sopTitle: 'Temporary exports and reconciliation' },
+    { sop: 'SOP-22', sopTitle: 'Training and awareness' },
+  ];
+  const CONTROL_SPECS = [
+    ['SOP-03.1', 'SOP-03', 'Every part entering the item master receives a jurisdiction and classification determination within the service level.', 'Automated', 'Continuous', 'classification-sla'],
+    ['SOP-03.2', 'SOP-03', 'Every ITAR determination retains a written basis that can be produced on request.', 'Automated', 'Continuous', 'itar-basis'],
+    ['SOP-03.3', 'SOP-03', 'Determinations of record are re-reviewed on the published cycle.', 'Automated', 'Continuous', 'review-cycle'],
+    ['SOP-03.4', 'SOP-03', 'The determination method and the analyst of record are recorded against every determination.', 'Manual sample', 'Quarterly', null],
+    ['SOP-07.1', 'SOP-07', 'Provisos are acknowledged and dated before the first shipment under the authorization.', 'Automated', 'Continuous', 'proviso-ack'],
+    ['SOP-07.2', 'SOP-07', 'A replacement application is filed ahead of the published renewal lead time.', 'Automated', 'Continuous', 'renewal-lead'],
+    ['SOP-07.3', 'SOP-07', 'No shipment is released against an expired authorization.', 'Automated', 'Continuous', 'no-post-expiry-shipment'],
+    ['SOP-07.4', 'SOP-07', 'Authorized value is monitored against the amendment threshold while term remains.', 'Automated', 'Continuous', 'value-monitoring'],
+    ['SOP-11.1', 'SOP-11', 'The jurisdiction of the item shipped matches the authorization it is shipped under.', 'Automated', 'Continuous', 'jurisdiction-match'],
+    ['SOP-11.2', 'SOP-11', 'No item is named on an authorization before it has a determination of record.', 'Automated', 'Continuous', 'classify-before-authorizing'],
+    ['SOP-11.3', 'SOP-11', 'Empowered Official review is evidenced before release for every controlled shipment.', 'Manual sample', 'Quarterly', null],
+    ['SOP-14.1', 'SOP-14', 'Supporting records are retained and retrievable for five years from the transaction.', 'Automated', 'Continuous', 'records-retention'],
+    ['SOP-14.2', 'SOP-14', 'Shipment records reconcile to the electronic export information filed.', 'Manual sample', 'Semi-annual', null],
+    ['SOP-19.1', 'SOP-19', 'Items exported temporarily are reconciled as returned on or before expiry.', 'Automated', 'Continuous', 'temp-reconciliation'],
+    ['SOP-19.2', 'SOP-19', 'An extension is requested where temporarily exported items must remain abroad.', 'Manual sample', 'Annual', null],
+    ['SOP-22.1', 'SOP-22', 'In-scope staff complete annual ITAR and EAR awareness training.', 'Manual sample', 'Annual', null],
+    ['SOP-22.2', 'SOP-22', 'New hires in scope complete awareness training within 30 days of start.', 'Manual sample', 'Quarterly', null],
+  ];
+  const FREQ_DAYS = { Continuous: 1, Quarterly: 92, 'Semi-annual': 183, Annual: 365 };
+  const FINDING_NOTES = [
+    'Sampled transaction had no evidence of the review step being performed.',
+    'Evidence existed but was not retrievable within the agreed period.',
+    'Step performed after the shipment rather than before it.',
+    'Record held outside the controlled repository.',
+    'Approval captured by email rather than in the system of record.',
+    'Two of the sampled transactions used a superseded version of the work instruction.',
+  ];
+
+  const controls = CONTROL_SPECS.map(([id, sop, step, method, frequency, measure], i) => {
+    const sopTitle = SOPS.find((x) => x.sop === sop).sopTitle;
+    const owner = ANALYSTS[i % ANALYSTS.length];
+    const auto = method === 'Automated';
+
+    /* A manual test is only as current as the last time somebody ran it — and
+       a control that has slipped past its own frequency is the finding that
+       matters most, so a few deliberately have. */
+    const overdueTest = !auto && chance(0.22);
+    const lastTestedOn = auto ? asOf
+      : (chance(0.06) ? null
+        : addDays(asOf, -(overdueTest ? FREQ_DAYS[frequency] + int(20, 220) : int(4, FREQ_DAYS[frequency] - 5))));
+
+    const sampleSize = auto ? null : int(12, 40);
+    const failures = auto ? null : (chance(0.42) ? int(1, Math.max(1, Math.round(sampleSize * 0.18))) : 0);
+    const passed = auto ? null : sampleSize - failures;
+
+    const findings = [];
+    const raiseCount = auto ? (chance(0.3) ? 1 : 0) : (failures > 0 ? int(1, 2) : 0);
+    for (let f = 0; f < raiseCount; f++) {
+      const raisedOn = lastTestedOn ? addDays(lastTestedOn, int(0, 12)) : addDays(asOf, -int(30, 300));
+      const dueOn = addDays(raisedOn, 60);
+      findings.push({
+        id: `CA-${id.replace(/[^0-9]/g, '')}-${f + 1}`,
+        note: pick(FINDING_NOTES),
+        raisedOn, dueOn,
+        closedOn: chance(0.45) ? addDays(raisedOn, int(8, 85)) : null,
+        owner,
+      });
+    }
+
+    return {
+      id, sop, sopTitle, step, owner, method, frequency, lastTestedOn,
+      testedBy: auto ? null : pick(ANALYSTS),
+      sampleSize, passed, measure, findings,
+    };
+  });
+
   /* Renewals are a large share of a licensing team's workload, so they are
      modelled as what they are: a fresh application that names the authorization
      it replaces. Without the link, "13 expiring in 90 days" cannot be told
@@ -1138,7 +1364,7 @@ const DATA = (function buildMockData() {
     authorizations.push(renewal);
   }
 
-  return { asOf, authorizations, classifications: parts };
+  return { asOf, authorizations, classifications: parts, controls };
 })();
 
 /* ===== END MOCK DATA LAYER ================================================ */
@@ -1236,6 +1462,150 @@ function trendMonths(at) {
     out.push(i === 0 ? at : endOfMonth(m));
   }
   return out;
+}
+
+/* ============================================================================
+   PROCESS COMPLIANCE
+   A control is an SOP step under test. A manual control carries the result of a
+   periodic sample. An automated control names a measure below, which derives
+   its population and its failures from the record set at a point in time — so
+   it is tested continuously against the whole population rather than a sample,
+   and its evidence is the data itself rather than a tester's note.
+
+   Each measure states what it counted. That matters more than the percentage:
+   a conformance figure whose denominator is unstated is unauditable.
+   ========================================================================== */
+const AUTOMATED_MEASURES = {
+  'classification-sla': {
+    unit: 'parts in the item master',
+    of: (s, at) => knownParts(s.classifications, at),
+    failing: (s, at) => undeterminedParts(s.classifications, at)
+      .filter((p) => daysBetween(p.addedOn, at) >= POLICY.CLASSIFICATION_SLA_DAYS),
+  },
+  'itar-basis': {
+    unit: 'ITAR-controlled parts',
+    of: (s, at) => determinedParts(s.classifications, at).filter((p) => p.jurisdiction === 'ITAR'),
+    failing: (s, at) => determinedParts(s.classifications, at).filter((p) => p.jurisdiction === 'ITAR' && !p.basisOnFile),
+  },
+  'review-cycle': {
+    unit: 'determinations of record',
+    of: (s, at) => determinedParts(s.classifications, at),
+    failing: (s, at) => determinedParts(s.classifications, at).filter((p) => p.reviewDueOn && p.reviewDueOn <= at),
+  },
+  'proviso-ack': {
+    unit: 'provisos on live authorizations',
+    of: (s, at) => liveAuths(s.authorizations, at).flatMap((a) => a.provisos),
+    failing: (s, at) => liveAuths(s.authorizations, at).flatMap((a) => openProvisos(a, at)),
+  },
+  'renewal-lead': {
+    unit: 'authorizations inside the renewal window',
+    of: (s, at) => liveAuths(s.authorizations, at)
+      .filter((a) => daysBetween(at, a.expiresOn) <= POLICY.RENEWAL_LEAD_DAYS),
+    failing: (s, at) => {
+      const filed = renewalsInFlight(s.authorizations, at);
+      return liveAuths(s.authorizations, at)
+        .filter((a) => daysBetween(at, a.expiresOn) <= POLICY.RENEWAL_LEAD_DAYS && !filed.has(a.id));
+    },
+  },
+  'no-post-expiry-shipment': {
+    unit: 'expired authorizations',
+    of: (s, at) => s.authorizations.filter((a) => isIssuedBy(a, at) && a.expiresOn <= at),
+    failing: (s, at) => s.authorizations.filter((a) => isIssuedBy(a, at) && a.expiresOn <= at
+      && a.shipments.some((sh) => sh.date > a.expiresOn && sh.date <= at)),
+  },
+  'value-monitoring': {
+    unit: 'value-bearing live authorizations',
+    of: (s, at) => liveAuths(s.authorizations, at).filter((a) => a.valueBearing),
+    failing: (s, at) => liveAuths(s.authorizations, at).filter((a) => {
+      const u = utilization(a, at);
+      return u !== null && u > POLICY.UTILIZATION_THRESHOLD
+        && daysBetween(at, a.expiresOn) > POLICY.AMENDMENT_RUNWAY_MONTHS * 30.4;
+    }),
+  },
+  'jurisdiction-match': {
+    unit: 'live EAR authorizations',
+    of: (s, at) => liveAuths(s.authorizations, at).filter((a) => a.regime === 'EAR'),
+    failing: (s, at) => liveAuths(s.authorizations, at).filter((a) => a.regime === 'EAR'
+      && partsOn(a).some((p) => p.jurisdiction === 'ITAR' && p.determinedOn <= at)),
+  },
+  'classify-before-authorizing': {
+    unit: 'live authorizations',
+    of: (s, at) => liveAuths(s.authorizations, at),
+    failing: (s, at) => liveAuths(s.authorizations, at)
+      .filter((a) => partsOn(a).some((p) => p.determinedOn === null || p.determinedOn > at)),
+  },
+  'records-retention': {
+    unit: 'authorizations inside the retention period',
+    of: (s, at) => s.authorizations.filter((a) => isIssuedBy(a, at) && daysBetween(a.expiresOn, at) < 5 * 365),
+    failing: (s, at) => s.authorizations.filter((a) => isIssuedBy(a, at)
+      && daysBetween(a.expiresOn, at) < 5 * 365 && !a.recordsOnFile),
+  },
+  'temp-reconciliation': {
+    unit: 'expired temporary authorizations',
+    of: (s, at) => s.authorizations.filter((a) => a.temporary && isIssuedBy(a, at) && a.expiresOn <= at),
+    failing: (s, at) => s.authorizations.filter((a) => a.temporary && isIssuedBy(a, at)
+      && a.expiresOn <= at && a.itemsReconciledOn === null),
+  },
+};
+
+const FREQUENCY_DAYS = { Continuous: 1, Quarterly: 92, 'Semi-annual': 183, Annual: 365 };
+
+/** A control's result: what was tested, how much of it conformed, and how. */
+function controlResult(control, slice, at) {
+  if (control.method === 'Automated') {
+    const m = AUTOMATED_MEASURES[control.measure];
+    const population = m ? m.of(slice, at).length : 0;
+    const failures = m ? m.failing(slice, at).length : 0;
+    return {
+      tested: population, failures, passed: population - failures,
+      conformance: population > 0 ? (population - failures) / population : null,
+      unit: m ? m.unit : '', continuous: true,
+      lastTestedOn: at, staleDays: 0,
+    };
+  }
+  const tested = control.sampleSize || 0;
+  const failures = tested - (control.passed || 0);
+  const dueEvery = FREQUENCY_DAYS[control.frequency] || 365;
+  const staleDays = control.lastTestedOn ? Math.max(0, daysBetween(control.lastTestedOn, at) - dueEvery) : Infinity;
+  return {
+    tested, failures, passed: control.passed || 0,
+    conformance: tested > 0 ? (control.passed || 0) / tested : null,
+    unit: 'transactions sampled', continuous: false,
+    lastTestedOn: control.lastTestedOn, staleDays,
+  };
+}
+
+/** Roll controls up to their procedure, weighting by what was actually tested. */
+function processCompliance(slice, at) {
+  const rows = (slice.controls || []).map((c) => ({ control: c, result: controlResult(c, slice, at) }));
+  const bySop = [...groupBy(rows, (r) => r.control.sop).entries()].map(([sop, rs]) => {
+    const tested = sum(rs.map((r) => r.result.tested));
+    const passed = sum(rs.map((r) => r.result.passed));
+    return {
+      sop, sopTitle: rs[0].control.sopTitle, controls: rs.length,
+      automated: rs.filter((r) => r.control.method === 'Automated').length,
+      tested, passed, failures: tested - passed,
+      conformance: tested > 0 ? passed / tested : null,
+      stale: rs.filter((r) => r.result.staleDays > 0).length,
+      openFindings: sum(rs.map((r) => r.control.findings.filter((f) => !f.closedOn).length)),
+    };
+  }).sort((a, b) => (a.conformance ?? 1) - (b.conformance ?? 1));
+
+  const findings = (slice.controls || []).flatMap((c) => c.findings.map((f) => ({ ...f, control: c })));
+  const testedTotal = sum(rows.map((r) => r.result.tested));
+  const passedTotal = sum(rows.map((r) => r.result.passed));
+  return {
+    rows, bySop,
+    conformance: testedTotal > 0 ? passedTotal / testedTotal : null,
+    testedTotal, failuresTotal: testedTotal - passedTotal,
+    automatedCount: rows.filter((r) => r.control.method === 'Automated').length,
+    manualCount: rows.filter((r) => r.control.method !== 'Automated').length,
+    staleCount: rows.filter((r) => r.result.staleDays > 0).length,
+    neverTested: rows.filter((r) => r.control.method !== 'Automated' && !r.control.lastTestedOn).length,
+    openFindings: findings.filter((f) => !f.closedOn).length,
+    overdueFindings: findings.filter((f) => !f.closedOn && f.dueOn <= at).length,
+    findings,
+  };
 }
 
 /* ============================================================================
@@ -1428,6 +1798,46 @@ const RULES = [
         value: p.controlCode, valueLabel: 'USML category',
         meta: [p.nomenclature, p.program, `${p.method}, ${fmtDate(p.determinedOn)}`],
         owner: p.analyst, onsetOn: p.determinedOn, cite: '22 CFR 122.5', view: 'class', focus: p.partNumber,
+      })),
+  },
+  {
+    key: 'control-test-overdue',
+    severity: 'serious',
+    name: 'Control not tested within its own frequency',
+    run: (s, at) => (s.controls || [])
+      .filter((c) => c.method !== 'Automated')
+      .map((c) => ({ c, r: controlResult(c, s, at) }))
+      .filter((x) => x.r.staleDays > 0)
+      .map(({ c, r }) => ({
+        subject: c.id,
+        title: c.lastTestedOn
+          ? `${c.id} — ${c.frequency.toLowerCase()} control test ${fmtInt(r.staleDays)} days late`
+          : `${c.id} — control has never been tested`,
+        why: `${c.sopTitle} sets a ${c.frequency.toLowerCase()} test on this step, and it was ${c.lastTestedOn ? `last run ${fmtDate(c.lastTestedOn)}` : 'never run'}. An untested control is not a control: nothing is known about whether the procedure is being followed, and the absence of a test is itself the audit finding.`,
+        value: c.lastTestedOn ? `${fmtInt(r.staleDays)} days` : 'Never',
+        valueLabel: c.lastTestedOn ? 'past due' : 'tested',
+        meta: [c.sop, c.frequency, c.method, c.step],
+        owner: c.owner,
+        onsetOn: c.lastTestedOn ? addDays(c.lastTestedOn, FREQUENCY_DAYS[c.frequency] || 365) : addDays(at, -400),
+        cite: 'Policy: control testing calendar', view: 'process', focus: c.id,
+      })),
+  },
+  {
+    key: 'corrective-action-overdue',
+    severity: 'serious',
+    name: 'Corrective action from a control test past its due date',
+    run: (s, at) => (s.controls || [])
+      .flatMap((c) => c.findings.map((f) => ({ c, f })))
+      .filter(({ f }) => !f.closedOn && f.dueOn <= at && f.raisedOn <= at)
+      .map(({ c, f }) => ({
+        subject: f.id,
+        title: `${f.id} — corrective action ${fmtInt(daysBetween(f.dueOn, at))} days past due`,
+        why: `Raised against ${c.id} on ${fmtDate(f.raisedOn)}: ${f.note} The finding is still open past its committed date. An audit that produces findings nobody closes reads worse than no audit at all, because the deficiency is now documented and unremediated.`,
+        value: `${fmtInt(daysBetween(f.dueOn, at))} days`, valueLabel: 'past due',
+        meta: [c.sop, c.sopTitle, `Due ${fmtDate(f.dueOn)}`],
+        owner: f.owner,
+        onsetOn: f.dueOn,
+        cite: 'Policy: corrective action commitment', view: 'process', focus: c.id,
       })),
   },
   {
@@ -1823,7 +2233,13 @@ function barsH(w, { rows, band = 30, bar = 16, maxValue = null, display = (r) =>
   if (threshold !== null) {
     const tx = x0 + (threshold / max) * plotW;
     root.appendChild(svg('line', { x1: tx, y1: 2, x2: tx, y2: rows.length * band + 2, stroke: 'var(--axis)', 'stroke-width': 1 }));
-    root.appendChild(svgText(tx + 5, rows.length * band + 7, thresholdLabel, { size: 10.5, fill: 'var(--text-muted)' }));
+    /* Flip the label to the inside of the line when it would run off the plot
+       — a threshold label clipped by its own chart edge is worse than none. */
+    const lw = textWidth(thresholdLabel, 10.5);
+    const fits = tx + 5 + lw <= w;
+    root.appendChild(svgText(fits ? tx + 5 : tx - 5, rows.length * band + 7, thresholdLabel, {
+      size: 10.5, fill: 'var(--text-muted)', anchor: fits ? 'start' : 'end',
+    }));
   }
 
   rows.forEach((r, i) => {
@@ -2117,6 +2533,11 @@ function currentSlice() {
   return {
     authorizations: DATA.authorizations.filter(keepAuth),
     classifications: DATA.classifications.filter(keepPart),
+    /* Controls are not program records, so they pass through whole. Their
+       automated measures then re-derive against the filtered slice, which is
+       why SOP conformance moves with the filters while a manual sample result
+       — taken once, across the business — does not. */
+    controls: DATA.controls,
   };
 }
 
@@ -2204,7 +2625,7 @@ function renderPosture(host, slice) {
       label: 'Value utilization', value: now.utilization === null ? '—' : fmtPct(now.utilization),
       note: `Amendment threshold at ${fmtPct(POLICY.UTILIZATION_THRESHOLD)} of authorized value`,
       series: hist.map((h) => (h.utilization === null ? null : h.utilization * 100)), dir: 'neutral',
-      delta: (a, b) => `${b - a >= 0 ? '+' : '−'}${Math.abs(b - a).toFixed(1)} pts`, fmt: (v) => `${v.toFixed(0)}%`,
+      delta: (a, b) => `${b - a >= 0 ? '+' : '−'}${Math.abs(b - a).toFixed(1)} pts`, fmt: (v) => `${v.toFixed(0)}%`, sig: 0.05,
     },
     {
       label: 'Open provisos', value: fmtInt(now.openProvisoCount),
@@ -2217,7 +2638,7 @@ function renderPosture(host, slice) {
       note: now.partCount === 0 ? 'No parts in the current selection'
         : `${fmtInt(now.undeterminedCount)} of ${fmtInt(now.partCount)} parts have no determination of record`,
       series: hist.map((h) => (h.coverage === null ? null : h.coverage * 100)), dir: 'up',
-      delta: (a, b) => `${b - a >= 0 ? '+' : '−'}${Math.abs(b - a).toFixed(1)} pts`, fmt: (v) => `${v.toFixed(1)}%`,
+      delta: (a, b) => `${b - a >= 0 ? '+' : '−'}${Math.abs(b - a).toFixed(1)} pts`, fmt: (v) => `${v.toFixed(1)}%`, sig: 0.05,
     },
     {
       label: 'Licensing turnaround', value: now.turnaround === null ? '—' : `${fmtInt(now.turnaround)} days`,
@@ -2236,13 +2657,17 @@ function renderPosture(host, slice) {
     card.appendChild(html('p', { class: 'v', text: t.value }));
 
     if (first !== undefined && first !== null && last !== null) {
+      /* A movement smaller than the delta's own display precision is not a
+         movement. Without this, a half-day shift in the median renders as
+         "+0 days" coloured as a regression, which is a judgement the number
+         does not support. */
+      const moved = Math.abs(last - first) >= (t.sig ?? 0.5);
       const rising = last > first;
-      const cls = t.dir === 'neutral' || last === first ? '' : (t.dir === 'up') === rising ? 'good' : 'bad';
-      const d = html('p', { class: 'd' }, [
-        html('span', { class: `delta ${cls}`, text: t.delta(first, last) }),
+      const cls = !moved || t.dir === 'neutral' ? '' : (t.dir === 'up') === rising ? 'good' : 'bad';
+      card.appendChild(html('p', { class: 'd' }, [
+        html('span', { class: `delta ${cls}`, text: moved ? t.delta(first, last) : 'No change' }),
         html('span', { text: `vs ${monthLabels[0]}` }),
-      ]);
-      card.appendChild(d);
+      ]));
     }
 
     const sparkHost = html('div', { class: 'spark' });
@@ -2264,6 +2689,7 @@ function renderPosture(host, slice) {
 
   /* ---- Needs attention ---- */
   host.appendChild(html('div', { class: 'section-head' }, [
+    html('p', { class: 'eyebrow', text: 'Action queue' }),
     html('h2', { text: 'Needs attention' }),
     html('p', {
       text: 'Every row is a rule evaluated against the record set, with the reason it matters stated in full, the analyst who owns it, and the date it fell due. Severity orders the queue; within a tier the rule kinds are dealt out round-robin, and within a rule the soonest due comes first. Reassigning an owner or clearing an action is held in this browser session only — there is no system of record behind this page to write to.',
@@ -2280,7 +2706,7 @@ function renderPosture(host, slice) {
     const defaultCount = Math.max(14, queue.bySeverity.critical + 3);
     const shown = STATE.queueExpanded ? queue.items : queue.items.slice(0, defaultCount);
     for (const it of shown) {
-      const row = html('div', { class: 'qrow' });
+      const row = html('div', { class: `qrow sev-${it.severity}` });
       row.appendChild(html('div', {}, [chip(it.severity)]));
       /* Every rule already knows which view and which record it is about.
          Wiring that up is the difference between "here is a finding" and
@@ -2288,7 +2714,7 @@ function renderPosture(host, slice) {
       row.appendChild(html('p', { class: 'qtitle' }, [
         html('button', {
           class: 'drill', type: 'button', text: it.title,
-          title: `Open ${it.subject} in the ${it.view === 'auth' ? 'Authorizations' : 'Classification'} detail table`,
+          title: `Open ${it.subject} in the ${{ auth: 'Authorizations', class: 'Classification', process: 'Process compliance' }[it.view]} detail table`,
           onclick: () => { STATE.view = it.view; STATE.focus = it.focus; render(); },
         }),
       ]));
@@ -2367,6 +2793,7 @@ function renderPosture(host, slice) {
 
   /* ---- Workload by owner ---- */
   host.appendChild(html('div', { class: 'section-head' }, [
+    html('p', { class: 'eyebrow', text: 'Capacity' }),
     html('h2', { text: 'Workload by owner' }),
     html('p', { text: 'Who is carrying the open actions, and how much of each analyst\u2019s load is already past its service level. Severity is an ordered scale, so the segments take a one-hue ramp \u2014 darker is more severe \u2014 and the legend carries the same icons as the queue chips.' }),
   ]));
@@ -2408,8 +2835,9 @@ function renderPosture(host, slice) {
 
   /* ---- Rule coverage ---- */
   const ruleCard = html('section', { class: 'card', style: 'margin-top:16px' });
-  ruleCard.appendChild(html('h3', { style: 'font-size:13.5px', text: 'Rules evaluated' }));
-  const rt = html('table', { class: 'data', style: 'margin-top:8px' });
+  ruleCard.appendChild(html('h3', { style: 'font-size:var(--t-md)', text: 'Rules evaluated' }));
+  const rt = html('table', { class: 'data' });
+  rt.appendChild(html('caption', { class: 'sr-only', text: 'Rules evaluated' }));
   rt.appendChild(html('thead', {}, [html('tr', {}, [
     html('th', { text: 'Severity', scope: 'col' }),
     html('th', { text: 'Rule', scope: 'col' }),
@@ -2424,11 +2852,13 @@ function renderPosture(host, slice) {
     ]));
   }
   rt.appendChild(rtb);
-  ruleCard.appendChild(rt);
+  /* Wide content scrolls inside its own container — never the page. */
+  ruleCard.appendChild(html('div', { class: 'tablewrap' }, [rt]));
   host.appendChild(ruleCard);
 
   /* ---- Audit readiness ---- */
   host.appendChild(html('div', { class: 'section-head' }, [
+    html('p', { class: 'eyebrow', text: 'Evidence' }),
     html('h2', { text: 'Audit readiness' }),
     html('p', {
       text: 'Whether the supporting paper exists — deliberately independent of whether the underlying decision was right. A determination can be correct and still be unevidenced, and only one of those two problems is visible from here.',
@@ -2468,6 +2898,7 @@ function renderAuthorizations(host, slice) {
   const live = liveAuths(slice.authorizations, AS_OF);
 
   host.appendChild(html('div', { class: 'section-head' }, [
+    html('p', { class: 'eyebrow', text: 'Module one' }),
     html('h2', { text: 'Authorizations and agreements' }),
     html('p', { text: 'What is authorized, what is about to lapse, how much authorized value is left, and how long a decision currently takes.' }),
   ]));
@@ -2638,6 +3069,7 @@ function renderAuthorizations(host, slice) {
 
   /* ---- Detail table ---- */
   host.appendChild(html('div', { class: 'section-head' }, [
+    html('p', { class: 'eyebrow', text: 'Records' }),
     html('h2', { text: 'Authorization detail' }),
     html('p', { text: 'Every authorization in the current selection. Sort by any column; open a row for its provisos, shipment history and named foreign parties.' }),
   ]));
@@ -2735,6 +3167,7 @@ function renderClassification(host, slice) {
   const open = undeterminedParts(parts, AS_OF);
 
   host.appendChild(html('div', { class: 'section-head' }, [
+    html('p', { class: 'eyebrow', text: 'Module two' }),
     html('h2', { text: 'Jurisdiction and classification' }),
     html('p', { text: 'What share of the item master has a determination of record, how old the backlog is, and where the control concentration sits.' }),
   ]));
@@ -2855,6 +3288,7 @@ function renderClassification(host, slice) {
 
   /* ---- Part detail ---- */
   host.appendChild(html('div', { class: 'section-head' }, [
+    html('p', { class: 'eyebrow', text: 'Records' }),
     html('h2', { text: 'Item master detail' }),
     html('p', { text: 'Every part in the current selection with its determination of record. Sort by any column.' }),
   ]));
@@ -2865,7 +3299,7 @@ function renderClassification(host, slice) {
     initial: { key: 'added', dir: 'asc' },
     columns: [
       { key: 'part', label: 'Part number', sort: (p) => p.partNumber, cell: (p) => p.partNumber },
-      { key: 'nomen', label: 'Nomenclature', sort: (p) => p.nomenclature, cell: (p) => p.nomenclature },
+      { key: 'nomen', label: 'Nomenclature', wrap: true, sort: (p) => p.nomenclature, cell: (p) => p.nomenclature },
       { key: 'program', label: 'Program', sort: (p) => p.program, cell: (p) => p.program },
       { key: 'jur', label: 'Jurisdiction', sort: (p) => p.jurisdiction || 'zzz', cell: (p) => p.jurisdiction || 'No determination' },
       { key: 'code', label: 'Control code', sort: (p) => p.controlCode || 'zzz', cell: (p) => p.controlCode || '—' },
@@ -2874,6 +3308,166 @@ function renderClassification(host, slice) {
       { key: 'added', label: 'Added', sort: (p) => p.addedOn.getTime(), cell: (p) => fmtDate(p.addedOn) },
       { key: 'determined', label: 'Determined', sort: (p) => (p.determinedOn ? p.determinedOn.getTime() : Infinity), cell: (p) => fmtDate(p.determinedOn) },
       { key: 'review', label: 'Re-review due', sort: (p) => (p.reviewDueOn ? p.reviewDueOn.getTime() : Infinity), cell: (p) => fmtDate(p.reviewDueOn) },
+    ],
+  }));
+}
+
+/* ============================================================================
+   PROCESS COMPLIANCE
+   ========================================================================== */
+function renderProcess(host, slice) {
+  host.textContent = '';
+  const pc = processCompliance(slice, AS_OF);
+
+  host.appendChild(html('div', { class: 'section-head' }, [
+    html('p', { class: 'eyebrow', text: 'Module three' }),
+    html('h2', { text: 'Process compliance' }),
+    html('p', { text: 'Whether the written procedure is the procedure being followed. Each row of each table is one SOP step under test: an automated control is evaluated continuously against the whole population and its evidence is the record set itself; a manual control carries the result of a periodic sample. Both land in the same conformance figure.' }),
+  ]));
+
+  const tiles = [
+    {
+      label: 'Control conformance', value: pc.conformance === null ? '—' : fmtPct(pc.conformance, 1),
+      note: `${fmtInt(pc.testedTotal)} items tested, ${fmtInt(pc.failuresTotal)} exceptions · target ${fmtPct(POLICY.CONFORMANCE_TARGET)}`,
+    },
+    {
+      label: 'Continuously tested', value: `${fmtInt(pc.automatedCount)} of ${fmtInt(pc.automatedCount + pc.manualCount)}`,
+      note: `${fmtInt(pc.automatedCount)} controls run against the whole population; ${fmtInt(pc.manualCount)} rely on a periodic sample`,
+    },
+    {
+      label: 'Tests past their own frequency', value: fmtInt(pc.staleCount),
+      note: pc.neverTested > 0 ? `${fmtInt(pc.neverTested)} of these have never been run` : 'Every control has been tested at least once',
+    },
+    {
+      label: 'Open corrective actions', value: fmtInt(pc.openFindings),
+      note: `${fmtInt(pc.overdueFindings)} past the date they were committed to`,
+    },
+  ];
+  const strip = html('div', { class: 'kpis kpis-4' });
+  for (const t of tiles) {
+    strip.appendChild(html('section', { class: 'card kpi' }, [
+      html('p', { class: 'k', text: t.label }),
+      html('p', { class: 'v', text: t.value }),
+      html('p', { class: 'note', text: t.note }),
+    ]));
+  }
+  host.appendChild(strip);
+
+  const grid = html('div', { class: 'grid-2' });
+
+  /* ---- Conformance by procedure ---- */
+  const sopRows = pc.bySop.map((r) => ({ label: r.sop, value: r.conformance ?? 0, r }));
+  grid.appendChild(figure({
+    title: 'Conformance by procedure',
+    subtitle: 'Items conforming ÷ items tested, across every control under each SOP. Lowest first.',
+    footnote: `Weighted by what was actually tested, so a procedure carrying an automated control over thousands of records is not averaged against a 20-item sample. The target line is the internal one at ${fmtPct(POLICY.CONFORMANCE_TARGET)}, not a regulatory figure.`,
+    draw: (w) => barsH(w, {
+      rows: sopRows, band: 32, bar: 17, maxValue: 1, labelMax: 90,
+      display: (r) => (r.r.conformance === null ? '—' : fmtPct(r.r.conformance, 1)),
+      threshold: POLICY.CONFORMANCE_TARGET, thresholdLabel: `${fmtPct(POLICY.CONFORMANCE_TARGET)} target`,
+      tipTitle: (r) => `${r.r.sop} · ${r.r.sopTitle}`,
+      tipRows: (r) => [
+        { value: r.r.conformance === null ? '—' : fmtPct(r.r.conformance, 1), name: 'conforming', color: 'var(--series-1)' },
+        { value: `${fmtInt(r.r.passed)} of ${fmtInt(r.r.tested)}`, name: 'items tested' },
+        { value: `${fmtInt(r.r.automated)} of ${fmtInt(r.r.controls)}`, name: 'controls automated' },
+      ],
+    }),
+    table: {
+      columns: [
+        { key: 'sop', label: 'SOP' }, { key: 'title', label: 'Procedure' },
+        { key: 'controls', label: 'Controls', num: true }, { key: 'automated', label: 'Automated', num: true },
+        { key: 'tested', label: 'Tested', num: true }, { key: 'failures', label: 'Exceptions', num: true },
+        { key: 'conf', label: 'Conformance', num: true }, { key: 'capa', label: 'Open actions', num: true },
+      ],
+      rows: pc.bySop.map((r) => ({
+        sop: r.sop, title: r.sopTitle, controls: fmtInt(r.controls), automated: fmtInt(r.automated),
+        tested: fmtInt(r.tested), failures: fmtInt(r.failures),
+        conf: r.conformance === null ? '—' : fmtPct(r.conformance, 1), capa: fmtInt(r.openFindings),
+      })),
+    },
+  }));
+
+  /* ---- Assurance coverage: how each control is actually tested ---- */
+  const ASSURANCE = [
+    { label: 'Continuous, whole population', v: '--asr-3', n: pc.rows.filter((r) => r.control.method === 'Automated').length },
+    { label: 'Periodic sample, in date', v: '--asr-2', n: pc.rows.filter((r) => r.control.method !== 'Automated' && r.result.staleDays === 0).length },
+    { label: 'Sample overdue or never run', v: '--asr-1', n: pc.rows.filter((r) => r.control.method !== 'Automated' && r.result.staleDays > 0).length },
+  ];
+  const assuranceTotal = sum(ASSURANCE.map((a) => a.n)) || 1;
+  grid.appendChild(figure({
+    title: 'Assurance coverage — how each control is tested',
+    subtitle: 'Strength of the evidence behind each control, not whether it passed.',
+    legend: ASSURANCE.map((a) => ({ label: a.label, color: `var(${a.v})`, shape: 'rect' })),
+    footnote: 'An ordered scale: continuous testing over the whole population is stronger evidence than a periodic sample, and a sample nobody has run is not evidence at all. Moving a control up this scale is the work that makes the conformance figure above worth trusting.',
+    draw: (w) => stackedRow(w, {
+      segments: ASSURANCE.map((a) => ({ label: a.label, value: a.n, varName: a.v })),
+      totalLabel: `${fmtInt(pc.automatedCount + pc.manualCount)} controls across ${fmtInt(pc.bySop.length)} procedures`,
+    }),
+    table: {
+      columns: [{ key: 'k', label: 'Assurance' }, { key: 'n', label: 'Controls', num: true }, { key: 'share', label: 'Share', num: true }],
+      rows: ASSURANCE.map((a) => ({ k: a.label, n: fmtInt(a.n), share: fmtPct(a.n / assuranceTotal, 1) })),
+    },
+  }));
+  host.appendChild(grid);
+
+  /* ---- Open corrective actions ---- */
+  const open = pc.findings.filter((f) => !f.closedOn).sort((a, b) => a.dueOn - b.dueOn);
+  host.appendChild(html('div', { class: 'section-head' }, [
+    html('p', { class: 'eyebrow', text: 'Remediation' }),
+    html('h2', { text: 'Corrective actions' }),
+    html('p', { text: 'Raised by a failed control test and closed when the fix is evidenced. Findings that outlive their committed date are also in the Posture queue — an audit that produces findings nobody closes reads worse than no audit at all.' }),
+  ]));
+  const capaCard = html('section', { class: 'card' });
+  if (!open.length) {
+    capaCard.appendChild(html('p', { class: 'queue-empty', text: 'No open corrective actions in the current selection.' }));
+  } else {
+    const t = html('table', { class: 'data' });
+    t.appendChild(html('caption', { class: 'sr-only', text: 'Open corrective actions' }));
+    t.appendChild(html('thead', {}, [html('tr', {}, [
+      html('th', { text: 'Action', scope: 'col' }), html('th', { text: 'Control', scope: 'col' }),
+      html('th', { text: 'Finding', scope: 'col' }), html('th', { text: 'Owner', scope: 'col' }),
+      html('th', { text: 'Raised', scope: 'col' }), html('th', { text: 'Due', scope: 'col' }),
+      html('th', { class: 'num', text: 'Status', scope: 'col' }),
+    ])]));
+    const tb = html('tbody');
+    for (const f of open) {
+      const late = f.dueOn <= AS_OF;
+      tb.appendChild(html('tr', {}, [
+        html('td', { text: f.id }),
+        html('td', { text: `${f.control.id} · ${f.control.sop}` }),
+        html('td', { style: 'white-space:normal; max-width:38ch', text: f.note }),
+        html('td', { text: f.owner }),
+        html('td', { text: fmtDate(f.raisedOn) }),
+        html('td', { text: fmtDate(f.dueOn) }),
+        html('td', { class: 'num' }, [late ? chip('serious', `${fmtInt(daysBetween(f.dueOn, AS_OF))} days late`, 'Overdue') : chip('good', null, 'Within date')]),
+      ]));
+    }
+    t.appendChild(tb);
+    capaCard.appendChild(html('div', { class: 'tablewrap' }, [t]));
+  }
+  host.appendChild(capaCard);
+
+  /* ---- Control detail ---- */
+  host.appendChild(html('div', { class: 'section-head' }, [
+    html('p', { class: 'eyebrow', text: 'Records' }),
+    html('h2', { text: 'Control detail' }),
+    html('p', { text: 'Every control under test, with what it was tested against. A conformance figure whose denominator is unstated is unauditable, so the population and the exception count are both shown.' }),
+  ]));
+  host.appendChild(sortableTable({
+    rows: pc.rows.slice(), caption: 'Control detail',
+    initial: { key: 'conf', dir: 'asc' },
+    focusKey: STATE.view === 'process' ? STATE.focus : null,
+    columns: [
+      { key: 'id', label: 'Control', sort: (r) => r.control.id, cell: (r) => r.control.id },
+      { key: 'sop', label: 'SOP', sort: (r) => r.control.sop, cell: (r) => r.control.sop },
+      { key: 'step', label: 'Control statement', wrap: true, sort: (r) => r.control.step, cell: (r) => r.control.step },
+      { key: 'method', label: 'Method', sort: (r) => r.control.method, cell: (r) => r.control.method },
+      { key: 'freq', label: 'Frequency', sort: (r) => r.control.frequency, cell: (r) => r.control.frequency },
+      { key: 'owner', label: 'Owner', sort: (r) => r.control.owner, cell: (r) => r.control.owner },
+      { key: 'last', label: 'Last tested', sort: (r) => (r.result.lastTestedOn ? r.result.lastTestedOn.getTime() : 0), cell: (r) => (r.control.method === 'Automated' ? 'Continuous' : fmtDate(r.control.lastTestedOn)) },
+      { key: 'pop', label: 'Tested against', sort: (r) => r.result.tested, cell: (r) => `${fmtInt(r.result.tested)} ${r.result.unit}` },
+      { key: 'fail', label: 'Exceptions', num: true, sort: (r) => r.result.failures, cell: (r) => fmtInt(r.result.failures) },
+      { key: 'conf', label: 'Conformance', num: true, sort: (r) => (r.result.conformance ?? 2), cell: (r) => (r.result.conformance === null ? '—' : fmtPct(r.result.conformance, 1)) },
     ],
   }));
 }
@@ -2956,7 +3550,12 @@ function sortableTable({ rows, columns, initial, caption, detail = null, focusKe
               if (again) again.focus();
             },
           }));
-        } else td.textContent = cl.cell(row);
+        } else {
+          td.textContent = cl.cell(row);
+          /* One prose column per table may wrap, so the numeric columns beside
+             it stay on screen instead of being pushed past the scroll edge. */
+          if (cl.wrap) td.style.cssText = 'white-space:normal; min-width:30ch; max-width:46ch';
+        }
         tr.appendChild(td);
       }
       tbody.appendChild(tr);
@@ -2995,7 +3594,7 @@ function render() {
   hideTip();
   const slice = currentSlice();
 
-  const viewName = { posture: 'Posture', auth: 'Authorizations', class: 'Classification' }[STATE.view];
+  const viewName = { posture: 'Posture', auth: 'Authorizations', class: 'Classification', process: 'Process compliance' }[STATE.view];
   document.getElementById('print-scope').textContent =
     `${viewName} · Program: ${STATE.program === 'all' ? 'All' : STATE.program}`
     + ` · Site: ${STATE.site === 'all' ? 'All' : STATE.site}`
@@ -3008,7 +3607,7 @@ function render() {
     ? `${fmtInt(slice.authorizations.length)} of ${fmtInt(DATA.authorizations.length)} authorizations · ${fmtInt(slice.classifications.length)} of ${fmtInt(DATA.classifications.length)} parts in scope`
     : `${fmtInt(DATA.authorizations.length)} authorizations · ${fmtInt(DATA.classifications.length)} parts in scope`;
 
-  const panes = { posture: 'view-posture', auth: 'view-auth', class: 'view-class' };
+  const panes = { posture: 'view-posture', auth: 'view-auth', class: 'view-class', process: 'view-process' };
   for (const [key, id] of Object.entries(panes)) {
     const pane = document.getElementById(id);
     const active = key === STATE.view;
@@ -3022,13 +3621,14 @@ function render() {
   }
   if (STATE.view === 'posture') renderPosture(document.getElementById('view-posture'), slice);
   else if (STATE.view === 'auth') renderAuthorizations(document.getElementById('view-auth'), slice);
-  else renderClassification(document.getElementById('view-class'), slice);
+  else if (STATE.view === 'class') renderClassification(document.getElementById('view-class'), slice);
+  else renderProcess(document.getElementById('view-process'), slice);
 }
 
 function boot() {
   document.getElementById('asof-chip').textContent = `Extract as of ${fmtDate(AS_OF)}`;
   document.getElementById('note-scope').textContent =
-    'Two modules are in scope: authorizations and agreements, and jurisdiction and classification. Deliberately out of scope for this proof of concept, and the obvious next modules: restricted party screening, foreign nationals and deemed exports, AES/EEI filing accuracy, voluntary disclosure tracking, and training completion.';
+    'Three modules are in scope: authorizations and agreements; jurisdiction and classification; and process compliance, the testing of the written procedures themselves. Deliberately out of scope for this proof of concept, and the obvious next modules: restricted party screening, foreign nationals and deemed exports, AES/EEI filing accuracy, and voluntary disclosure tracking.';
 
   const programs = [...new Set(DATA.authorizations.map((a) => a.program))].sort();
   const sites = [...new Set(DATA.authorizations.map((a) => a.site))].sort();
@@ -3055,7 +3655,7 @@ function boot() {
   /* Tabs follow the ARIA tabs pattern: one tab stop for the whole set, with
      the arrow keys moving between them. Tabbing through three tabs to reach
      the content is not what a tablist is supposed to cost. */
-  const TAB_KEYS = ['posture', 'auth', 'class'];
+  const TAB_KEYS = ['posture', 'auth', 'class', 'process'];
   const selectTab = (key, focus) => {
     if (STATE.view !== key) { STATE.view = key; STATE.focus = null; render(); }
     if (focus) document.getElementById(`tab-${key}`).focus();

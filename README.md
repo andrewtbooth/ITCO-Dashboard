@@ -2,8 +2,9 @@
 
 A single-page dashboard showing an aerospace & defense contractor's international
 trade compliance posture: the health of its ITAR and EAR export authorizations,
-the coverage of its jurisdiction and classification determinations, and the open
-items an Empowered Official is accountable for.
+the coverage of its jurisdiction and classification determinations, whether the
+written procedures are the procedures being followed, and the open items an
+Empowered Official is accountable for.
 
 **Every record in this dashboard is synthetic.** Programs, part numbers,
 authorization numbers, foreign parties, and determinations are all generated. It
@@ -23,15 +24,16 @@ risk picture:
 |---|---|
 | **Authorizations & agreements** | What is authorized, what is about to lapse, whether anything has been filed to replace it, how much authorized value is left, and which conditions have not been acknowledged |
 | **Jurisdiction & classification** | What share of the item master has a determination of record, how old the backlog is, and where the control concentration sits |
+| **Process compliance** | Whether the written SOP is the procedure being followed, how strong the evidence behind each control is, and whether audit findings get closed |
 
-The two are on one page so they can check each other. The parts named on an
+The first two are on one page so they can check each other. The parts named on an
 authorization join to the item master, which is what lets the dashboard ask the
 question neither module can answer alone: **is anything being exported under an
 authorization that does not cover it?**
 
 Deliberately out of scope for this POC, and the obvious next modules: restricted
 party screening, foreign nationals and deemed exports, AES/EEI filing accuracy,
-voluntary disclosure tracking, and training completion.
+and voluntary disclosure tracking.
 
 ## The three views
 
@@ -54,6 +56,40 @@ provisos and shipment history.
 **Classification** covers backlog aging, jurisdiction mix, control
 concentration, determination throughput, and a sortable part-level table.
 
+**Process compliance** covers conformance by procedure against the internal
+target, the strength of the evidence behind each control, the open corrective
+actions, and a sortable control-level table.
+
+### How process compliance works
+
+A **control** is one SOP step under test, and it arrives in one of two shapes:
+
+- An **automated** control names a measure that derives its population and its
+  failures from the record set itself. It is therefore tested continuously
+  against the whole population rather than a sample, and its evidence *is* the
+  data. `SOP-19.1 — items exported temporarily are reconciled as returned on or
+  before expiry` is the same computation as the critical action rule of the same
+  name; the audit view and the work queue cannot disagree because they are one
+  derivation.
+- A **manual** control carries the result of a periodic sample: how many
+  transactions were examined, how many conformed, by whom, and when.
+
+Both land in the same conformance figure, weighted by what was actually tested,
+so a procedure carrying an automated control over thousands of records is not
+averaged against a 20-item sample. Eleven of the seventeen controls here are
+automated and six are sampled — which is what a compliance program mid-automation
+actually looks like.
+
+Two things feed back into the Posture queue, so there is still one place to look
+for work: a control that has slipped past **its own testing frequency** (an
+untested control is not a control), and a **corrective action past the date it
+was committed to** (an audit that produces findings nobody closes reads worse
+than no audit at all).
+
+Because automated measures re-derive against the filtered slice, SOP conformance
+moves with the program and site filters while a manual sample result — taken once,
+across the business — does not. The page says so on the tab.
+
 ## Metric definitions
 
 | Metric | Definition |
@@ -66,6 +102,8 @@ concentration, determination throughput, and a sortable part-level table.
 | Backlog aging | Days since a part without a determination entered the item master |
 | Licensing turnaround | Median days from submission to issuance, trailing 90 days |
 | Determination throughput | Parts entering the queue vs. determinations completed, by month |
+| Control conformance | Items conforming ÷ items tested, weighted by what was actually tested |
+| Assurance strength | Continuous whole-population testing > periodic sample in date > sample overdue or never run |
 | Action onset | The date the condition actually became true — an expiry date, the shipment that broke a licence, or the date cumulative shipped value crossed the amendment threshold, read off the shipment history |
 | Action due date | Onset + a remediation window by severity: 5 days critical, 30 serious, 90 watch |
 | Past service level | Open actions whose due date has passed |
@@ -86,6 +124,8 @@ entered the item master.
 | Critical | Part determined ITAR named on an EAR authorization | A USML article moves on State Department authorization; shipping one against a BIS licence is an export made without the approval it required |
 | Serious | Part with no determination named on a live authorization | The authorization asserts what the item is; nobody has decided |
 | Serious | Authorization expiring with no replacement application filed | Renewal lead time is weeks for a licence and months for an agreement — the decision needed making long before the expiry date |
+| Serious | Control not tested within its own frequency | An untested control is not a control; the absence of a test is itself the finding |
+| Serious | Corrective action past its committed date | The deficiency is now documented and unremediated |
 | Serious | Authorized value >85% consumed with >6 months of term remaining | The value will run out long before the authorization does, and an amendment takes longer to obtain than the balance will cover |
 | Serious | 3+ provisos not acknowledged on a live authorization | The most common finding in a licensing audit |
 | Serious | Supporting records not on file | Five-year retention applies, 22 CFR 122.5 and 15 CFR 762 |
@@ -97,7 +137,7 @@ entered the item master.
 
 Severity orders the queue, but within a tier the rule kinds are dealt out
 round-robin — one rule matching forty records would otherwise fill the visible
-queue and bury the other twelve.
+queue and bury the other fourteen.
 
 The queue is truncated by default, but **never across the critical tier**: the
 default view always runs to the end of critical and a few rows into the next
@@ -240,6 +280,16 @@ authorization that had none left — a condition the rules flag.
 
 ## Design and accessibility notes
 
+### The shell
+
+A sticky toolbar carries the tabs and the one filter row together, so navigation
+and scope stay reachable on a page this tall. Type sizes, radii, elevation and
+easing are tokens rather than per-component values, so the four views read as one
+system. Section headings carry an eyebrow label, queue rows carry a severity
+accent on the leading edge alongside their chip, and cards lift slightly on hover
+where they are interactive. Everything transitions on one easing curve, and all of
+it is switched off under `prefers-reduced-motion`.
+
 - **No external dependencies.** All CSS and JavaScript is inline and the charts
   are hand-rolled SVG, so the page renders under a strict content security
   policy with no network access.
@@ -251,8 +301,16 @@ authorization that had none left — a condition the rules flag.
   3-step severity) were run through the computable checks — lightness band,
   chroma floor, CVD separation, normal-vision floor and contrast for the
   categorical set; monotone lightness, adjacent ΔL, light-end contrast and
-  single hue for the ramps — against all three surfaces this page renders on:
-  light, dark, and the pure white of print. **Twelve runs, all passing.**
+  single hue for the ramps — against every surface this page renders on. When
+  the shell was restyled the light surface became pure white and the dark
+  surface moved, so the whole set was re-run against the new values rather than
+  assumed to carry over. **Sixteen runs, all passing.**
+- **Every text token clears 4.5:1 on every surface it lands on.** Restyling
+  moved the light surface to pure white, which put muted text — axis ticks,
+  footnotes, detail-box labels — at 4.23:1 against white and 3.74:1 against the
+  detail-box fill. Muted is therefore `#6b6962` rather than the reference
+  palette's `#898781`, which measures 3.59:1 on white. Marks still only owe
+  3:1, so the sparkline's de-emphasis hue is unchanged.
 - **Severity is a ramp, not the status palette — and that was a measured
   decision.** The workload chart stacks actions by severity, and the obvious
   move is to paint the segments in the status colours they wear everywhere
