@@ -7,8 +7,9 @@ written procedures are the procedures being followed, and the open items an
 Empowered Official is accountable for.
 
 **Every record in this dashboard is synthetic.** Programs, part numbers,
-authorization numbers, foreign parties, and determinations are all generated. It
-is a proof of concept for layout and metric definitions, not a compliance record.
+authorization numbers, foreign parties, determinations and audit results are all
+generated. It is a proof of concept for layout and metric definitions, not a
+compliance record.
 
 Open `index.html` in a browser. There is no build step, no package manager, and
 no network dependency.
@@ -17,8 +18,9 @@ no network dependency.
 
 ## What it covers
 
-Two modules, chosen as the two that most directly drive an Empowered Official's
-risk picture:
+Three modules, chosen as the ones that most directly drive an Empowered
+Official's risk picture — what is authorized, what the items are, and whether the
+procedures are being followed:
 
 | Module | What it answers |
 |---|---|
@@ -35,7 +37,7 @@ Deliberately out of scope for this POC, and the obvious next modules: restricted
 party screening, foreign nationals and deemed exports, AES/EEI filing accuracy,
 and voluntary disclosure tracking.
 
-## The three views
+## The four views
 
 **Posture** opens with the count of open compliance actions, six KPI tiles each
 carrying a 12-month trend, and a prioritized *Needs attention* queue. Every row
