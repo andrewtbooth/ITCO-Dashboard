@@ -593,6 +593,7 @@ const POLICY = {
   CLASSIFICATION_SLA_DAYS:  90,        // age at which an undetermined part escalates
   ADJUDICATION_NORMAL_DAYS: 60,        // expected licensing decision window
   TURNAROUND_TRAILING_DAYS: 90,        // window for the median turnaround measure
+  RENEWAL_LEAD_DAYS:        120,       // when a replacement application should be in
 };
 
 /* How long an action may sit after the condition arose before it is overdue.
@@ -668,6 +669,12 @@ function groupBy(xs, key) {
      kindLabel           string   human-readable form of `kind`
      regime              string   'ITAR' | 'EAR'
      temporary           boolean  true when items must return (e.g. DSP-73)
+     valueBearing        boolean  true when the authorization carries a value
+                                  ceiling that hardware shipments consume.
+                                  False for TAAs and MLAs, which authorize
+                                  defense services and technical data — every
+                                  value measure skips them rather than showing
+                                  a utilization figure that does not exist.
      status              string   'In adjudication' | 'Issued'
                                   Expiry is NOT a status — "live", "expired" and
                                   "fully consumed" are all derived from expiresOn
@@ -681,7 +688,8 @@ function groupBy(xs, key) {
      submittedOn         Date     date the application left the company
      issuedOn            Date|null  date the authorization was granted
      expiresOn           Date|null  expiration date on the face of the authorization
-     authorizedValueUsd  number   value authorized on the face of the authorization
+     authorizedValueUsd  number|null  value authorized on the face of the
+                                  authorization; null when !valueBearing
      destinations        string[] destination countries
      region              string   destination region, for the value-by-region roll-up
      foreignParties      [{ name: string, role: string, country: string }]
@@ -689,7 +697,15 @@ function groupBy(xs, key) {
                                   acknowledgedOn === null means "not acknowledged"
      shipments           [{ date: Date, valueUsd: number, ref: string }]
                                   shippedValue is summed from this array, never stored
-     partNumbers         string[] item-master keys, joining to Part.partNumber
+     partNumbers         string[] item-master keys, joining to Part.partNumber.
+                                  This join is what lets the two modules check
+                                  each other: an EAR licence listing a part
+                                  determined ITAR is an export without the
+                                  authorization it needs.
+     renewalOfId         string|null  set on a pending application that replaces
+                                  an existing authorization, so an expiring
+                                  authorization can be told apart from an
+                                  expiring one nobody has acted on
      recordsOnFile       boolean  supporting records retained (22 CFR 122.5 / 15 CFR 762)
      itemsReconciledOn   Date|null  temporary exports only: date items were reconciled
                                     as returned. null on an expired temporary
@@ -772,13 +788,22 @@ const DATA = (function buildMockData() {
     { region: 'Latin America', w: 8,  countries: ['Brazil', 'Chile', 'Colombia'] },
   ];
 
+  /* valueBearing marks the authorizations that carry a value ceiling on their
+     face and consume it as hardware ships. Licences do; a TAA and an MLA do
+     not — they authorize defense services and technical data, and the hardware
+     that supports them moves on its own licences. Treating an agreement as a
+     value pool that burns down is the single most common way a trade
+     compliance dashboard shows a number its own subject-matter experts do not
+     recognise, so utilization, the amendment threshold and the value-by-region
+     roll-up all skip them. Provisos, records and expiry still apply — those are
+     where agreements actually generate work. */
   const KINDS = [
-    { kind: 'DSP-5',  kindLabel: 'DSP-5 permanent export',              regime: 'ITAR', termYears: 4,  temporary: false, w: 30 },
-    { kind: 'DSP-73', kindLabel: 'DSP-73 temporary export',             regime: 'ITAR', termYears: 4,  temporary: true,  w: 11 },
-    { kind: 'TAA',    kindLabel: 'Technical assistance agreement',      regime: 'ITAR', termYears: 10, temporary: false, w: 15 },
-    { kind: 'MLA',    kindLabel: 'Manufacturing license agreement',     regime: 'ITAR', termYears: 10, temporary: false, w: 6 },
-    { kind: 'WDA',    kindLabel: 'Warehouse and distribution agreement', regime: 'ITAR', termYears: 10, temporary: false, w: 4 },
-    { kind: 'BIS',    kindLabel: 'BIS export license',                  regime: 'EAR',  termYears: 4,  temporary: false, w: 26 },
+    { kind: 'DSP-5',  kindLabel: 'DSP-5 permanent export',              regime: 'ITAR', termYears: 4,  temporary: false, valueBearing: true,  w: 30 },
+    { kind: 'DSP-73', kindLabel: 'DSP-73 temporary export',             regime: 'ITAR', termYears: 4,  temporary: true,  valueBearing: true,  w: 11 },
+    { kind: 'TAA',    kindLabel: 'Technical assistance agreement',      regime: 'ITAR', termYears: 10, temporary: false, valueBearing: false, w: 15 },
+    { kind: 'MLA',    kindLabel: 'Manufacturing license agreement',     regime: 'ITAR', termYears: 10, temporary: false, valueBearing: false, w: 6 },
+    { kind: 'WDA',    kindLabel: 'Warehouse and distribution agreement', regime: 'ITAR', termYears: 10, temporary: false, valueBearing: true,  w: 4 },
+    { kind: 'BIS',    kindLabel: 'BIS export license',                  regime: 'EAR',  termYears: 4,  temporary: false, valueBearing: true,  w: 26 },
   ];
 
   const PARTIES = [
@@ -959,8 +984,31 @@ const DATA = (function buildMockData() {
     authorizations.push(makeAuth({ id, k, prog, reg, destinations, status: 'Issued', submittedOn, issuedOn, expiresOn }));
   }
 
+  /* The parts named on an authorization are drawn from the ones its regime
+     actually covers — a BIS licence lists EAR items, a DSP-5 lists USML items.
+     Drawing at random would put a USML part on nearly every EAR licence and
+     turn the cross-module check into noise instead of a finding. The defects
+     are then seeded deliberately and sparsely, which is what makes them mean
+     something when the rule fires. */
+  function pickParts(prog, k) {
+    const pool = partsByProgram.get(prog.name) || [];
+    const wants = k.regime === 'ITAR' ? 'ITAR' : 'EAR';
+    const onRegime = pool.filter((p) => p.jurisdiction === wants);
+    const offRegime = pool.filter((p) => p.determinedOn && p.jurisdiction === 'ITAR' && wants === 'EAR');
+    const undetermined = pool.filter((p) => p.determinedOn === null);
+
+    const chosen = sample(onRegime.length ? onRegime : pool, int(2, 5)).map((p) => p.partNumber);
+    /* A USML part sitting on an EAR licence: an export without State approval. */
+    if (offRegime.length && chance(0.05)) chosen.push(pick(offRegime).partNumber);
+    /* A part being moved before anyone decided what it is. */
+    if (undetermined.length && chance(0.06)) chosen.push(pick(undetermined).partNumber);
+    return [...new Set(chosen)];
+  }
+
   function makeAuth({ id, k, prog, reg, destinations, status, submittedOn, issuedOn, expiresOn }) {
-    const authorizedValueUsd = Math.round(Math.exp(13.2 + gauss() * 1.25) / 1000) * 1000 + 40000;
+    const authorizedValueUsd = k.valueBearing
+      ? Math.round(Math.exp(13.2 + gauss() * 1.25) / 1000) * 1000 + 40000
+      : null;
 
     const foreignParties = sample(PARTIES, int(1, 3)).map((name, idx) => ({
       name, role: idx === 0 ? 'End-user' : pick(PARTY_ROLES), country: pick(destinations),
@@ -999,7 +1047,7 @@ const DATA = (function buildMockData() {
        A minority burn their authorized value far faster than their term, which
        is the condition the amendment-threshold rule exists to catch. */
     const shipments = [];
-    if (status === 'Issued') {
+    if (status === 'Issued' && k.valueBearing) {
       const fastBurn = chance(0.2);
       const u = rnd();
       const target = fastBurn ? 0.78 + rnd() * 0.22
@@ -1047,18 +1095,47 @@ const DATA = (function buildMockData() {
 
     return {
       id, kind: k.kind, kindLabel: k.kindLabel, regime: k.regime, temporary: k.temporary,
+      valueBearing: k.valueBearing,
       status, program: prog.name, site: prog.site, analyst: programAnalyst.get(prog.name),
       submittedOn, issuedOn, expiresOn,
       authorizedValueUsd, destinations, region: reg.region, foreignParties, provisos, shipments,
-      partNumbers: sample((partsByProgram.get(prog.name) || []).map((p) => p.partNumber), int(2, 5)),
+      partNumbers: pickParts(prog, k),
       recordsOnFile: status === 'Issued' ? chance(0.935) : true,
       /* Temporary exports must be reconciled as returned. Leaving that blank
          after expiry is the single worst finding in this data set. */
+      renewalOfId: null,
       itemsReconciledOn: !k.temporary || status !== 'Issued' ? null
         : (expiresOn < asOf
           ? (chance(0.45) ? addDays(expiresOn, -int(1, 120)) : null)
           : (chance(0.2) ? addDays(issuedOn, int(30, Math.max(31, daysBetween(issuedOn, asOf)))) : null)),
     };
+  }
+
+  /* Renewals are a large share of a licensing team's workload, so they are
+     modelled as what they are: a fresh application that names the authorization
+     it replaces. Without the link, "13 expiring in 90 days" cannot be told
+     apart from "13 expiring in 90 days and nobody has filed anything". */
+  const renewalSeq = { 'DSP-5': 2461000, 'DSP-73': 762000, TAA: 3140, MLA: 1360, WDA: 420, BIS: 496000 };
+  for (const a of authorizations.slice()) {
+    if (a.status !== 'Issued' || a.expiresOn <= asOf) continue;
+    const daysLeft = daysBetween(asOf, a.expiresOn);
+    if (daysLeft > 210 || !chance(0.55)) continue;
+    const k = KINDS.find((x) => x.kind === a.kind);
+    renewalSeq[a.kind] += int(3, 29);
+    const yy = String(asOf.getUTCFullYear()).slice(2);
+    const rid = a.kind === 'DSP-5' ? `DSP5-${pad(renewalSeq[a.kind], 7)}`
+      : a.kind === 'DSP-73' ? `DSP73-${pad(renewalSeq[a.kind], 7)}`
+      : a.kind === 'TAA' ? `TA-${pad(renewalSeq[a.kind], 4)}-${yy}`
+      : a.kind === 'MLA' ? `ML-${pad(renewalSeq[a.kind], 4)}-${yy}`
+      : a.kind === 'WDA' ? `WD-${pad(renewalSeq[a.kind], 4)}-${yy}`
+      : `BIS-D${pad(renewalSeq[a.kind], 7)}`;
+    const renewal = makeAuth({
+      id: rid, k, prog: { name: a.program, site: a.site }, reg: { region: a.region },
+      destinations: a.destinations, status: 'In adjudication',
+      submittedOn: addDays(asOf, -int(5, 150)), issuedOn: null, expiresOn: null,
+    });
+    renewal.renewalOfId = a.id;
+    authorizations.push(renewal);
   }
 
   return { asOf, authorizations, classifications: parts };
@@ -1079,13 +1156,16 @@ const DATA = (function buildMockData() {
 
 const shippedBy = (a, at) => sum(a.shipments.filter((s) => s.date <= at).map((s) => s.valueUsd));
 const shippedValue = (a) => sum(a.shipments.map((s) => s.valueUsd));
-const utilization = (a, at) => (a.authorizedValueUsd > 0 ? shippedBy(a, at) / a.authorizedValueUsd : 0);
+/** null for an authorization that carries no value ceiling — an agreement has
+    no utilization, and reporting 0% for one is a made-up number. */
+const utilization = (a, at) => (a.valueBearing && a.authorizedValueUsd > 0 ? shippedBy(a, at) / a.authorizedValueUsd : null);
 
 const isIssuedBy = (a, at) => a.issuedOn !== null && a.issuedOn <= at;
 const isPendingAt = (a, at) => a.submittedOn <= at && !isIssuedBy(a, at);
 
 /** Live = issued, unexpired, and not fully consumed. */
-const isLive = (a, at) => isIssuedBy(a, at) && a.expiresOn > at && shippedBy(a, at) < a.authorizedValueUsd;
+const isLive = (a, at) => isIssuedBy(a, at) && a.expiresOn > at
+  && (!a.valueBearing || shippedBy(a, at) < a.authorizedValueUsd);
 const liveAuths = (auths, at) => auths.filter((a) => isLive(a, at));
 
 const openProvisos = (a, at) => a.provisos.filter((p) => p.acknowledgedOn === null || p.acknowledgedOn > at);
@@ -1121,14 +1201,20 @@ function turnaroundMedian(auths, at, regime) {
 function measures(slice, at) {
   const live = liveAuths(slice.authorizations, at);
   const soon = live.filter((a) => daysBetween(at, a.expiresOn) <= POLICY.EXPIRY_WINDOW_DAYS);
+  const filedRenewals = renewalsInFlight(slice.authorizations, at);
   const known = knownParts(slice.classifications, at);
   const done = determinedParts(slice.classifications, at);
-  const authorized = sum(live.map((a) => a.authorizedValueUsd));
-  const shipped = sum(live.map((a) => shippedBy(a, at)));
+  /* Value measures run over the value-bearing authorizations only. */
+  const valued = live.filter((a) => a.valueBearing);
+  const authorized = sum(valued.map((a) => a.authorizedValueUsd));
+  const shipped = sum(valued.map((a) => shippedBy(a, at)));
   return {
     liveCount: live.length,
     expiringCount: soon.length,
-    expiringAtRiskValue: sum(soon.map((a) => Math.max(0, a.authorizedValueUsd - shippedBy(a, at)))),
+    expiringWithRenewal: soon.filter((a) => filedRenewals.has(a.id)).length,
+    expiringAtRiskValue: sum(soon.filter((a) => a.valueBearing)
+      .map((a) => Math.max(0, a.authorizedValueUsd - shippedBy(a, at)))),
+    valuedLiveCount: valued.length,
     /* A ratio with nothing in its denominator is not zero, it is unknown.
        Reporting 0% coverage for an empty selection would state something the
        records do not say; these come back null and render as an em dash. */
@@ -1158,6 +1244,16 @@ function trendMonths(at) {
    language, why the match matters. Citations locate the obligation; the
    thresholds are the policy settings declared at the top of this script.
    ========================================================================== */
+/* The parts named on an authorization are attributes of that authorization,
+   so this lookup runs over the whole item master rather than the filtered
+   slice: a BIS licence listing a USML part is a defect of that licence
+   whatever the item-master filter happens to be set to. */
+const PART_INDEX = new Map(DATA.classifications.map((p) => [p.partNumber, p]));
+const partsOn = (a) => a.partNumbers.map((n) => PART_INDEX.get(n)).filter(Boolean);
+/** Authorizations that have a replacement application pending as of `at`. */
+const renewalsInFlight = (auths, at) => new Set(
+  auths.filter((a) => a.renewalOfId && isPendingAt(a, at)).map((a) => a.renewalOfId));
+
 const SEVERITY_ORDER = ['critical', 'serious', 'watch'];
 /* Every status colour on the page travels with an icon and a label, so the
    colour never carries the meaning on its own. `good` and `warning` are not
@@ -1205,12 +1301,69 @@ const RULES = [
       })),
   },
   {
+    key: 'usml-on-ear-auth',
+    severity: 'critical',
+    name: 'Part determined ITAR named on an EAR authorization',
+    run: (s, at) => liveAuths(s.authorizations, at)
+      .filter((a) => a.regime === 'EAR')
+      .map((a) => ({ a, bad: partsOn(a).filter((p) => p.jurisdiction === 'ITAR' && p.determinedOn <= at) }))
+      .filter((x) => x.bad.length > 0)
+      .map(({ a, bad }) => ({
+        subject: a.id,
+        title: `${a.id} — ${bad.length === 1 ? 'a USML part is' : `${bad.length} USML parts are`} named on an EAR authorization`,
+        why: `${bad.map((p) => p.partNumber).join(', ')} ${bad.length === 1 ? 'is' : 'are'} determined ITAR (${[...new Set(bad.map((p) => `USML ${p.controlCode}`))].join(', ')}), and ${bad.length === 1 ? 'it is' : 'they are'} named on an EAR licence. A USML article moves on State Department authorization; shipping one against a BIS licence is an export made without the approval it required, not a paperwork mismatch.`,
+        value: `${bad.length}`, valueLabel: bad.length === 1 ? 'USML part' : 'USML parts',
+        meta: [a.kindLabel, a.program, a.destinations.join(', '), `Expires ${fmtDate(a.expiresOn)}`],
+        owner: a.analyst,
+        onsetOn: new Date(Math.max(a.issuedOn.getTime(), ...bad.map((p) => p.determinedOn.getTime()))),
+        cite: '22 CFR 127.1', view: 'auth', focus: a.id,
+      })),
+  },
+  {
+    key: 'undetermined-on-auth',
+    severity: 'serious',
+    name: 'Part with no determination named on a live authorization',
+    run: (s, at) => liveAuths(s.authorizations, at)
+      .map((a) => ({ a, open: partsOn(a).filter((p) => p.determinedOn === null || p.determinedOn > at) }))
+      .filter((x) => x.open.length > 0)
+      .map(({ a, open }) => ({
+        subject: a.id,
+        title: `${a.id} — ${open.length === 1 ? 'a part on this authorization has' : `${open.length} parts on this authorization have`} no determination`,
+        why: `${open.map((p) => p.partNumber).join(', ')} ${open.length === 1 ? 'is' : 'are'} named on a live authorization with no jurisdiction and classification of record. The authorization asserts what these items are; nobody has decided. Either the determination is made, or the item comes off the authorization.`,
+        value: `${open.length}`, valueLabel: open.length === 1 ? 'part' : 'parts',
+        meta: [a.kindLabel, a.program, open.map((p) => p.nomenclature).join(', ')],
+        owner: a.analyst,
+        onsetOn: new Date(Math.max(a.issuedOn.getTime(), ...open.map((p) => p.addedOn.getTime()))),
+        cite: 'Policy: classify before authorizing', view: 'auth', focus: a.id,
+      })),
+  },
+  {
+    key: 'expiring-no-renewal',
+    severity: 'serious',
+    name: 'Authorization expiring with no replacement application filed',
+    run: (s, at) => {
+      const filed = renewalsInFlight(s.authorizations, at);
+      return liveAuths(s.authorizations, at)
+        .map((a) => ({ a, left: daysBetween(at, a.expiresOn) }))
+        .filter((x) => x.left <= POLICY.EXPIRY_WINDOW_DAYS && !filed.has(x.a.id))
+        .map(({ a, left }) => ({
+          subject: a.id, title: `${a.id} — expires in ${left} days with nothing filed`,
+          why: `This authorization lapses in ${left} days and no replacement application names it. Licensing turnaround on this portfolio runs to weeks and agreements to months, so the decision to renew, let it lapse, or move the work to another authorization needed making around ${POLICY.RENEWAL_LEAD_DAYS} days out.`,
+          value: `${left} days`, valueLabel: 'until expiry',
+          meta: [a.kindLabel, a.program, a.destinations.join(', '), `Expires ${fmtDate(a.expiresOn)}`],
+          owner: a.analyst,
+          onsetOn: addDays(a.expiresOn, -POLICY.RENEWAL_LEAD_DAYS),
+          cite: `Policy: ${POLICY.RENEWAL_LEAD_DAYS}-day renewal lead time`, view: 'auth', focus: a.id,
+        }));
+    },
+  },
+  {
     key: 'value-threshold',
     severity: 'serious',
     name: 'Authorized value consumed past the amendment threshold with term remaining',
     run: (s, at) => liveAuths(s.authorizations, at)
       .map((a) => ({ a, u: utilization(a, at), rem: daysBetween(at, a.expiresOn) }))
-      .filter((x) => x.u > POLICY.UTILIZATION_THRESHOLD && x.rem > POLICY.AMENDMENT_RUNWAY_MONTHS * 30.4)
+      .filter((x) => x.u !== null && x.u > POLICY.UTILIZATION_THRESHOLD && x.rem > POLICY.AMENDMENT_RUNWAY_MONTHS * 30.4)
       .map(({ a, u, rem }) => ({
         subject: a.id, title: `${a.id} — ${fmtPct(u)} of authorized value consumed`,
         why: `${fmtUsd(a.authorizedValueUsd - shippedBy(a, at))} of authorized value remains against ${Math.round(rem / 30.4)} months of remaining term. The value will be exhausted long before the authorization expires, and an amendment takes longer to obtain than the remaining balance will cover.`,
@@ -2042,7 +2195,8 @@ function renderPosture(host, slice) {
     },
     {
       label: `Expiring in ${POLICY.EXPIRY_WINDOW_DAYS} days or less`, value: fmtInt(now.expiringCount),
-      note: `${fmtUsd(now.expiringAtRiskValue)} unshipped balance at risk`,
+      note: now.expiringCount === 0 ? 'Nothing lapses inside the window'
+        : `${fmtInt(now.expiringWithRenewal)} of ${fmtInt(now.expiringCount)} have a replacement application in adjudication · ${fmtUsd(now.expiringAtRiskValue)} unshipped balance at risk`,
       series: hist.map((h) => h.expiringCount), dir: 'down',
       delta: (a, b) => `${b - a >= 0 ? '+' : '−'}${fmtInt(Math.abs(b - a))}`, fmt: fmtInt,
     },
@@ -2323,13 +2477,15 @@ function renderAuthorizations(host, slice) {
   /* ---- 1. Expiry pipeline ---- */
   const pipeMonths = [];
   for (let i = 1; i <= 12; i++) pipeMonths.push(addMonths(startOfMonth(AS_OF), i));
+  const filed = renewalsInFlight(slice.authorizations, AS_OF);
   const pipe = pipeMonths.map((m) => {
     const inMonth = live.filter((a) => sameMonth(a.expiresOn, m));
     return {
       label: fmtMonYear(m), axis: fmtAxisMonth(m),
       itar: inMonth.filter((a) => a.regime === 'ITAR').length,
       ear: inMonth.filter((a) => a.regime === 'EAR').length,
-      balance: sum(inMonth.map((a) => Math.max(0, a.authorizedValueUsd - shippedValue(a)))),
+      balance: sum(inMonth.filter((a) => a.valueBearing).map((a) => Math.max(0, a.authorizedValueUsd - shippedValue(a)))),
+      renewed: inMonth.filter((a) => filed.has(a.id)).length,
     };
   });
   const beyond = live.filter((a) => a.expiresOn > endOfMonth(pipeMonths[11])).length;
@@ -2340,7 +2496,7 @@ function renderAuthorizations(host, slice) {
       { label: 'ITAR', color: 'var(--series-1)', shape: 'rect' },
       { label: 'EAR', color: 'var(--series-2)', shape: 'rect' },
     ],
-    footnote: `${fmtInt(beyond)} further live authorizations expire beyond this window. Renewal lead time on an agreement runs to several months, so the first three columns are the ones already in hand.`,
+    footnote: `${fmtInt(sum(pipe.map((p) => p.renewed)))} of the ${fmtInt(sum(pipe.map((p) => p.itar + p.ear)))} authorizations in this window already have a replacement application in adjudication — the table view has the split by month. ${fmtInt(beyond)} further live authorizations expire beyond it. Renewal lead time on an agreement runs to several months, so the first three columns are the ones already in hand.`,
     draw: (w) => columns(w, {
       labels: pipe.map((p) => p.axis),
       series: [
@@ -2381,7 +2537,8 @@ function renderAuthorizations(host, slice) {
     { label: '75–85%',       v: '--util-4', lo: 0.75, hi: POLICY.UTILIZATION_THRESHOLD },
     { label: 'Over 85%',     v: '--util-5', lo: POLICY.UTILIZATION_THRESHOLD, hi: Infinity },
   ];
-  const liveUtil = live.map((a) => ({ a, u: utilization(a, AS_OF) }));
+  const liveValued = live.filter((a) => a.valueBearing);
+  const liveUtil = liveValued.map((a) => ({ a, u: utilization(a, AS_OF) }));
   const utilBands = UTIL_BANDS.map((b) => {
     const inBand = liveUtil.filter((x) => x.u >= b.lo && x.u < b.hi);
     return {
@@ -2390,13 +2547,14 @@ function renderAuthorizations(host, slice) {
     };
   });
   const overCount = utilBands[utilBands.length - 1].value;
+  const agreementCount = live.length - liveValued.length;
   const overNames = liveUtil.filter((x) => x.u >= POLICY.UTILIZATION_THRESHOLD)
     .sort((x, y) => y.u - x.u).slice(0, 3).map((x) => x.a.id);
   grid.appendChild(figure({
     title: 'Value utilization against the amendment threshold',
     subtitle: 'Live authorizations by how much of their authorized value has been shipped.',
     legend: UTIL_BANDS.map((b) => ({ label: b.label, color: `var(${b.v})`, shape: 'rect' })),
-    footnote: `${fmtInt(overCount)} of ${fmtInt(live.length)} live authorizations are past the ${fmtPct(POLICY.UTILIZATION_THRESHOLD)} threshold — highest first, ${overNames.join(', ')}. Sort the detail table below by utilization for the full list; each one is also an action in the queue where it has term remaining.`,
+    footnote: `${fmtInt(overCount)} of ${fmtInt(liveValued.length)} value-bearing live authorizations are past the ${fmtPct(POLICY.UTILIZATION_THRESHOLD)} threshold — highest first, ${overNames.join(', ')}. Sort the detail table below by utilization for the full list. A further ${fmtInt(agreementCount)} live technical assistance and manufacturing licence agreements are excluded: they authorize defense services and technical data, not a value ceiling that hardware draws down.`,
     draw: (w) => barsH(w, {
       rows: utilBands, band: 30, bar: 16, labelMax: 110,
       display: (r) => fmtInt(r.value),
@@ -2414,19 +2572,19 @@ function renderAuthorizations(host, slice) {
       ],
       rows: utilBands.map((r) => ({
         band: r.label, n: fmtInt(r.value),
-        share: fmtPct(r.value / (live.length || 1), 1), balance: fmtUsd(r.balance),
+        share: fmtPct(r.value / (liveValued.length || 1), 1), balance: fmtUsd(r.balance),
       })),
     },
   }));
 
   /* ---- 3. Authorized value by destination region ---- */
-  const byRegion = [...groupBy(live, (a) => a.region).entries()]
+  const byRegion = [...groupBy(liveValued, (a) => a.region).entries()]
     .map(([region, as]) => ({ label: region, value: sum(as.map((a) => a.authorizedValueUsd)), n: as.length, shipped: sum(as.map((a) => shippedValue(a))) }))
     .sort((a, b) => b.value - a.value);
   grid.appendChild(figure({
     title: 'Authorized value by destination region',
     subtitle: 'Value on the face of live authorizations, by where it may go.',
-    footnote: 'Regions are a reporting roll-up of the destination countries named on each authorization; an authorization naming several countries is counted once, in the region of its primary destination.',
+    footnote: 'Regions are a reporting roll-up of the destination countries named on each authorization; one naming several countries is counted once, in the region of its primary destination. Agreements are excluded — they carry no value on their face.',
     draw: (w) => barsH(w, {
       rows: byRegion, band: 34, bar: 18,
       display: (r) => fmtUsd(r.value),
@@ -2496,8 +2654,8 @@ function renderAuthorizations(host, slice) {
       { key: 'program', label: 'Program', sort: (a) => a.program, cell: (a) => a.program },
       { key: 'dest', label: 'Destination', sort: (a) => a.destinations[0], cell: (a) => a.destinations.join(', ') },
       { key: 'status', label: 'Status', sort: (a) => authStatus(a), cell: (a) => authStatus(a) },
-      { key: 'value', label: 'Authorized', num: true, sort: (a) => a.authorizedValueUsd, cell: (a) => fmtUsd(a.authorizedValueUsd) },
-      { key: 'util', label: 'Utilization', num: true, sort: (a) => utilization(a, AS_OF), cell: (a) => (a.status === 'Issued' ? fmtPct(utilization(a, AS_OF)) : '—') },
+      { key: 'value', label: 'Authorized', num: true, sort: (a) => (a.authorizedValueUsd ?? -1), cell: (a) => (a.valueBearing ? fmtUsd(a.authorizedValueUsd) : '—') },
+      { key: 'util', label: 'Utilization', num: true, sort: (a) => (utilization(a, AS_OF) ?? -1), cell: (a) => { const u = utilization(a, AS_OF); return u === null || a.status !== 'Issued' ? '—' : fmtPct(u); } },
       { key: 'provisos', label: 'Open provisos', num: true, sort: (a) => openProvisos(a, AS_OF).length, cell: (a) => fmtInt(openProvisos(a, AS_OF).length) },
       { key: 'expires', label: 'Expires', sort: (a) => (a.expiresOn ? a.expiresOn.getTime() : Infinity), cell: (a) => fmtDate(a.expiresOn) },
     ],
@@ -2510,10 +2668,14 @@ function renderAuthorizations(host, slice) {
       kv('Submitted', fmtDate(a.submittedOn));
       kv('Issued', fmtDate(a.issuedOn));
       kv('Expires', fmtDate(a.expiresOn));
-      kv('Authorized value', fmtUsdFull(a.authorizedValueUsd));
-      kv('Shipped to date', fmtUsdFull(shippedValue(a)));
+      kv('Authorized value', a.valueBearing ? fmtUsdFull(a.authorizedValueUsd) : 'Not value-limited');
+      kv('Shipped to date', a.valueBearing ? fmtUsdFull(shippedValue(a)) : '—');
       kv('Supporting records', a.recordsOnFile ? 'On file' : 'Not on file');
       if (a.temporary) kv('Items reconciled', a.itemsReconciledOn ? fmtDate(a.itemsReconciledOn) : 'Not reconciled');
+      const replacing = DATA.authorizations.find((x) => x.id === a.renewalOfId);
+      if (replacing) kv('Replaces', replacing.id);
+      const replacedBy = DATA.authorizations.find((x) => x.renewalOfId === a.id && x.status === 'In adjudication');
+      if (replacedBy) kv('Replacement filed', `${replacedBy.id}, ${fmtDate(replacedBy.submittedOn)}`);
       kv('Item master keys', a.partNumbers.join(', ') || '—');
       box.appendChild(facts);
 
@@ -2559,7 +2721,7 @@ function renderAuthorizations(host, slice) {
 function authStatus(a) {
   if (a.status !== 'Issued') return a.status;
   if (a.expiresOn <= AS_OF) return 'Expired';
-  if (shippedValue(a) >= a.authorizedValueUsd) return 'Fully consumed';
+  if (a.valueBearing && shippedValue(a) >= a.authorizedValueUsd) return 'Fully consumed';
   return 'Live';
 }
 

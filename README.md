@@ -21,8 +21,13 @@ risk picture:
 
 | Module | What it answers |
 |---|---|
-| **Authorizations & agreements** | What is authorized, what is about to lapse, how much authorized value is left, and which conditions have not been acknowledged |
+| **Authorizations & agreements** | What is authorized, what is about to lapse, whether anything has been filed to replace it, how much authorized value is left, and which conditions have not been acknowledged |
 | **Jurisdiction & classification** | What share of the item master has a determination of record, how old the backlog is, and where the control concentration sits |
+
+The two are on one page so they can check each other. The parts named on an
+authorization join to the item master, which is what lets the dashboard ask the
+question neither module can answer alone: **is anything being exported under an
+authorization that does not cover it?**
 
 Deliberately out of scope for this POC, and the obvious next modules: restricted
 party screening, foreign nationals and deemed exports, AES/EEI filing accuracy,
@@ -54,8 +59,8 @@ concentration, determination throughput, and a sortable part-level table.
 | Metric | Definition |
 |---|---|
 | Live authorization | Issued, unexpired, and not fully consumed |
-| Value utilization | Shipped value ÷ authorized value |
-| Expiring ≤ 90 days | Live authorizations within 90 days of their expiration date; the "at risk" figure is their unshipped balance |
+| Value utilization | Shipped value ÷ authorized value, over value-bearing authorizations only |
+| Expiring ≤ 90 days | Live authorizations within 90 days of their expiration date; the "at risk" figure is their unshipped balance, and the coverage figure is how many have a replacement application in adjudication |
 | Open provisos | Provisos on live authorizations with no acknowledgement date recorded |
 | Classification coverage | Parts with a determination of record ÷ all parts in the item master |
 | Backlog aging | Days since a part without a determination entered the item master |
@@ -78,6 +83,9 @@ entered the item master.
 |---|---|---|
 | Critical | Temporary authorization expired with items not reconciled as returned | Items abroad past expiry are outside an authorization until reconciled or re-authorized |
 | Critical | Shipment recorded after authorization expiry | Assess against the voluntary disclosure decision, 22 CFR 127.12 |
+| Critical | Part determined ITAR named on an EAR authorization | A USML article moves on State Department authorization; shipping one against a BIS licence is an export made without the approval it required |
+| Serious | Part with no determination named on a live authorization | The authorization asserts what the item is; nobody has decided |
+| Serious | Authorization expiring with no replacement application filed | Renewal lead time is weeks for a licence and months for an agreement — the decision needed making long before the expiry date |
 | Serious | Authorized value >85% consumed with >6 months of term remaining | The value will run out long before the authorization does, and an amendment takes longer to obtain than the balance will cover |
 | Serious | 3+ provisos not acknowledged on a live authorization | The most common finding in a licensing audit |
 | Serious | Supporting records not on file | Five-year retention applies, 22 CFR 122.5 and 15 CFR 762 |
@@ -89,7 +97,7 @@ entered the item master.
 
 Severity orders the queue, but within a tier the rule kinds are dealt out
 round-robin — one rule matching forty records would otherwise fill the visible
-queue and bury the other nine.
+queue and bury the other twelve.
 
 The queue is truncated by default, but **never across the critical tier**: the
 default view always runs to the end of critical and a few rows into the next
@@ -117,6 +125,13 @@ classification service level, a 3-year re-review cycle) are illustrative
 internal policy rather than regulatory deadlines. Every threshold the page
 applies is named in one `POLICY` object at the top of the script, with the
 re-review cycle as its own constant, `REVIEW_CYCLE_YEARS`.
+
+### What the rules deliberately do not do
+
+There is no rule for restricted party screening, deemed exports, or filing
+accuracy, because those modules are out of scope and a rule that half-checks
+them would be worse than none. Every rule here runs on data the two in-scope
+modules actually hold.
 
 ## Working the queue
 
@@ -163,6 +178,31 @@ every derivation, chart, and action rule below it works unchanged.
 The generator is seeded, so the dataset is identical on every load and for every
 viewer. That keeps a demo reproducible and keeps diffs meaningful. Dates are
 handled in UTC throughout for the same reason.
+
+### Domain modelling decisions
+
+These are the places where the obvious data model would produce a number a
+trade compliance professional does not recognise:
+
+- **Agreements do not burn value.** A TAA and an MLA authorize defense services
+  and technical data; the hardware supporting them moves on its own licences.
+  They carry no value ceiling, so utilization, the amendment threshold and the
+  value-by-region roll-up all skip them — showing a TAA at "62% consumed" is
+  the fastest way to lose a subject-matter audience. Provisos, records and
+  expiry still apply, and that is where agreements actually generate work.
+- **The parts named on an authorization follow its regime.** A BIS licence
+  lists EAR items, a DSP-5 lists USML items. Drawn at random, roughly half of
+  every EAR licence's parts would be USML and the cross-module check would fire
+  on almost everything — noise rather than a finding. The mismatches are seeded
+  deliberately and sparsely, which is what makes them mean something.
+- **Renewals are modelled as what they are:** a fresh application naming the
+  authorization it replaces. Without that link, "13 expiring in 90 days" cannot
+  be told apart from "13 expiring and nobody has filed anything" — which is the
+  only version of that number worth putting on a dashboard.
+- **The item-master filter does not reach inside an authorization.** Parts named
+  on an authorization are attributes of it, so the cross-module lookup runs over
+  the whole item master: a BIS licence listing a USML part is a defect of that
+  licence whatever the filter is set to.
 
 ### Notes on the synthetic data itself
 
