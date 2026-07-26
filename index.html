@@ -1,0 +1,2575 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trade Compliance Posture — ITAR / EAR</title>
+<style>
+/* ============================================================================
+   TOKENS
+   Light is the base. The dark values are declared twice on purpose: once under
+   prefers-color-scheme (the OS setting) and once under :root[data-theme="dark"]
+   (the viewer's explicit choice). The :not() guard on the media block lets an
+   explicit light stamp beat OS-dark, so the toggle wins in both directions.
+   Chart colours come from the validated palette; status colours are reserved
+   and are never reused as a series colour.
+   ========================================================================== */
+:root {
+  color-scheme: light;
+
+  --page:            #f9f9f7;
+  --surface-1:       #fcfcfb;
+  --surface-2:       #f2f1ed;
+  --text-primary:    #0b0b0b;
+  --text-secondary:  #52514e;
+  --text-muted:      #898781;
+  --grid:            #e1e0d9;
+  --axis:            #c3c2b7;
+  --border:          rgba(11, 11, 11, 0.10);
+  --border-strong:   rgba(11, 11, 11, 0.18);
+  --ghost:           rgba(11, 11, 11, 0.045);
+
+  /* categorical — slots 1 and 2 of the validated order */
+  --series-1:        #2a78d6;
+  --series-2:        #eb6834;
+  --de-emphasis:     #898781;
+
+  /* ordinal ramps — one hue, monotone lightness, validated per mode.
+     --ord-* is the 4-step backlog age ramp; --util-* the 5-step utilization
+     ramp. Both run light→dark on light and dark→light on dark, so "further
+     along the scale" always reads as further from the surface. */
+  --ord-1:           #86b6ef;
+  --ord-2:           #5598e7;
+  --ord-3:           #256abf;
+  --ord-4:           #0d366b;
+  --util-1:          #86b6ef;
+  --util-2:          #5598e7;
+  --util-3:          #2a78d6;
+  --util-4:          #1c5cab;
+  --util-5:          #0d366b;
+
+  /* status — fixed in both modes, never themed, never a series colour */
+  --status-good:     #0ca30c;
+  --status-warning:  #fab219;
+  --status-serious:  #ec835a;
+  --status-critical: #d03b3b;
+  --success-text:    #006300;
+
+  --shadow: 0 1px 2px rgba(11, 11, 11, 0.04);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page:           #0d0d0d;
+    --surface-1:      #1a1a19;
+    --surface-2:      #232322;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --grid:           #2c2c2a;
+    --axis:           #383835;
+    --border:         rgba(255, 255, 255, 0.10);
+    --border-strong:  rgba(255, 255, 255, 0.20);
+    --ghost:          rgba(255, 255, 255, 0.06);
+    --series-1:       #3987e5;
+    --series-2:       #d95926;
+    --de-emphasis:    #898781;
+    --ord-1:          #184f95;
+    --ord-2:          #2a78d6;
+    --ord-3:          #6da7ec;
+    --ord-4:          #cde2fb;
+    --util-1:         #184f95;
+    --util-2:         #2a78d6;
+    --util-3:         #5598e7;
+    --util-4:         #86b6ef;
+    --util-5:         #cde2fb;
+    --success-text:   #0ca30c;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page:           #0d0d0d;
+  --surface-1:      #1a1a19;
+  --surface-2:      #232322;
+  --text-primary:   #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted:     #898781;
+  --grid:           #2c2c2a;
+  --axis:           #383835;
+  --border:         rgba(255, 255, 255, 0.10);
+  --border-strong:  rgba(255, 255, 255, 0.20);
+  --ghost:          rgba(255, 255, 255, 0.06);
+  --series-1:       #3987e5;
+  --series-2:       #d95926;
+  --de-emphasis:    #898781;
+  --ord-1:          #184f95;
+  --ord-2:          #2a78d6;
+  --ord-3:          #6da7ec;
+  --ord-4:          #cde2fb;
+  --util-1:         #184f95;
+  --util-2:         #2a78d6;
+  --util-3:         #5598e7;
+  --util-4:         #86b6ef;
+  --util-5:         #cde2fb;
+  --success-text:   #0ca30c;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+/* ============================================================================
+   BASE
+   ========================================================================== */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+/* An author `display` beats the user-agent's [hidden] rule, so anything given
+   an explicit display (the legend row, the filter row) would stay on screen
+   after being hidden. This puts that back. */
+[hidden] { display: none !important; }
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--text-primary);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -0.01em; }
+p { margin: 0; }
+:focus-visible {
+  outline: 2px solid var(--series-1);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+.wrap { max-width: 1320px; margin: 0 auto; padding: 0 24px 72px; }
+.muted { color: var(--text-muted); }
+.secondary { color: var(--text-secondary); }
+.nums { font-variant-numeric: tabular-nums; }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* ============================================================================
+   HEADER · TABS · FILTERS
+   ========================================================================== */
+.masthead { border-bottom: 1px solid var(--border); background: var(--surface-1); }
+.masthead-inner {
+  max-width: 1320px; margin: 0 auto; padding: 22px 24px 0;
+  display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start;
+}
+.masthead-titles { flex: 1 1 420px; min-width: 0; }
+.masthead h1 { font-size: 21px; }
+.masthead .sub { color: var(--text-secondary); margin-top: 3px; font-size: 13px; }
+.masthead-meta {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding-top: 2px;
+}
+.asof {
+  font-size: 12px; color: var(--text-secondary);
+  border: 1px solid var(--border); border-radius: 999px; padding: 4px 11px;
+  background: var(--surface-2); white-space: nowrap;
+}
+
+.synthetic {
+  margin: 16px 0 0; padding: 9px 14px; border-radius: 8px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  font-size: 12.5px; color: var(--text-secondary);
+  display: flex; gap: 9px; align-items: baseline;
+}
+.synthetic strong { color: var(--text-primary); font-weight: 600; }
+
+.tabs {
+  display: flex; gap: 2px; margin-top: 18px;
+  border-bottom: 1px solid transparent;
+}
+.tab {
+  appearance: none; background: none; border: 0;
+  border-bottom: 2px solid transparent;
+  font: inherit; font-size: 13.5px; font-weight: 500;
+  color: var(--text-secondary); cursor: pointer;
+  padding: 9px 14px 11px; border-radius: 6px 6px 0 0;
+  transition: color .12s, background .12s;
+}
+.tab:hover { background: var(--ghost); color: var(--text-primary); }
+.tab[aria-selected="true"] {
+  color: var(--text-primary); border-bottom-color: var(--series-1); font-weight: 600;
+}
+
+/* One filter row, above everything it scopes. */
+.filters {
+  display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end;
+  padding: 16px 0 4px;
+}
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field > span { font-size: 11.5px; color: var(--text-muted); letter-spacing: .02em; }
+.field select {
+  font: inherit; font-size: 13px; color: var(--text-primary);
+  background: var(--surface-1); border: 1px solid var(--border-strong);
+  border-radius: 7px; padding: 6px 9px; min-width: 152px; cursor: pointer;
+}
+.filter-note { flex: 1 1 auto; text-align: right; font-size: 12.5px; color: var(--text-muted); }
+.btn {
+  appearance: none; font: inherit; font-size: 12.5px; cursor: pointer;
+  background: var(--surface-1); color: var(--text-secondary);
+  border: 1px solid var(--border-strong); border-radius: 7px; padding: 6px 11px;
+  transition: background .12s, color .12s;
+}
+.btn:hover { background: var(--ghost); color: var(--text-primary); }
+
+/* ============================================================================
+   CARDS · SECTIONS
+   ========================================================================== */
+.card {
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 10px; padding: 18px 20px 16px; box-shadow: var(--shadow);
+}
+.section-head { margin: 30px 0 12px; }
+.section-head h2 { font-size: 15.5px; }
+.section-head p { font-size: 12.5px; color: var(--text-secondary); margin-top: 3px; max-width: 78ch; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 900px) { .grid-2 { grid-template-columns: minmax(0, 1fr); } }
+
+/* ============================================================================
+   HERO · KPI TILES
+   ========================================================================== */
+.hero {
+  display: flex; flex-wrap: wrap; gap: 22px 40px; align-items: flex-start;
+  margin-top: 20px;
+}
+.hero-figure { flex: 0 0 auto; }
+.hero-figure .label { font-size: 12.5px; color: var(--text-secondary); }
+.hero-figure .value {
+  font-size: 56px; line-height: 1.03; font-weight: 600; letter-spacing: -0.03em;
+  margin-top: 2px;
+}
+.hero-figure .foot { font-size: 12.5px; color: var(--text-muted); margin-top: 4px; }
+.hero-split { flex: 1 1 340px; display: flex; flex-wrap: wrap; gap: 10px 26px; align-self: flex-end; }
+.hero-split .cell { min-width: 108px; }
+.hero-split .cell .n { font-size: 20px; font-weight: 600; }
+.hero-split .cell .k { font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
+
+.kpis {
+  display: grid; gap: 14px; margin-top: 18px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+@media (max-width: 1080px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 620px)  { .kpis { grid-template-columns: minmax(0, 1fr); } }
+.kpi { display: flex; flex-direction: column; gap: 2px; }
+.kpi .k { font-size: 12.5px; color: var(--text-secondary); }
+.kpi .v { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; }
+.kpi .d { font-size: 12px; color: var(--text-muted); display: flex; align-items: baseline; gap: 5px; }
+.kpi .d .delta { font-weight: 600; }
+.kpi .d .delta.good { color: var(--success-text); }
+.kpi .d .delta.bad  { color: var(--status-critical); }
+.kpi .spark { margin-top: 8px; }
+.kpi .note { font-size: 11.5px; color: var(--text-muted); margin-top: 6px; }
+
+/* ============================================================================
+   FIGURE (chart card) — every chart has a table-view twin
+   ========================================================================== */
+.fig { display: flex; flex-direction: column; }
+.fig-head { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 2px; }
+.fig-head .t { flex: 1 1 auto; min-width: 0; }
+.fig-head h3 { font-size: 13.5px; }
+.fig-head .s { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+.viewtoggle {
+  display: inline-flex; flex: 0 0 auto; border: 1px solid var(--border-strong);
+  border-radius: 7px; overflow: hidden; background: var(--surface-1);
+}
+.viewtoggle button {
+  appearance: none; border: 0; background: none; font: inherit; font-size: 11.5px;
+  padding: 4px 9px; cursor: pointer; color: var(--text-secondary);
+  transition: background .12s, color .12s;
+}
+.viewtoggle button:hover { background: var(--ghost); }
+.viewtoggle button[aria-pressed="true"] { background: var(--surface-2); color: var(--text-primary); font-weight: 600; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 8px 0 2px; }
+.legend .item { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
+.legend .swatch { width: 11px; height: 11px; border-radius: 2px; flex: 0 0 auto; }
+.legend .line-key { width: 14px; height: 2px; border-radius: 1px; flex: 0 0 auto; }
+.legend .glyph { font-size: 11px; line-height: 1; }
+
+.plot { margin-top: 6px; position: relative; }
+.plot svg { display: block; width: 100%; height: auto; }
+/* Charts are keyboard-reachable: every hit band is a tab stop and shows on
+   focus exactly what it shows on hover. */
+.plot g.band { cursor: default; }
+.plot g.band:focus { outline: none; }
+.plot g.band:focus-visible { outline: 2px solid var(--series-1); outline-offset: -3px; }
+
+.fig-foot { font-size: 11.5px; color: var(--text-muted); margin-top: 8px; }
+
+/* Table twin */
+.tablewrap { margin-top: 8px; overflow-x: auto; }
+table.data { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+table.data th, table.data td {
+  text-align: left; padding: 6px 10px 6px 0; border-bottom: 1px solid var(--grid);
+  white-space: nowrap;
+}
+table.data th {
+  font-weight: 600; color: var(--text-secondary); font-size: 11.5px;
+  position: sticky; top: 0; background: var(--surface-1);
+}
+table.data td.num, table.data th.num { text-align: right; font-variant-numeric: tabular-nums; padding-right: 14px; }
+table.data tbody tr:hover { background: var(--ghost); }
+table.data tbody tr:last-child td { border-bottom: 0; }
+
+/* Sortable detail tables */
+.sortbtn {
+  appearance: none; background: none; border: 0; font: inherit; font-size: 11.5px;
+  font-weight: 600; color: var(--text-secondary); cursor: pointer; padding: 0;
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.sortbtn:hover { color: var(--text-primary); }
+.sortbtn .arrow { font-size: 9px; color: var(--text-muted); }
+.sortbtn[aria-sort-active="true"] { color: var(--text-primary); }
+.sortbtn[aria-sort-active="true"] .arrow { color: var(--series-1); }
+.rowtoggle {
+  appearance: none; background: none; border: 0; font: inherit; cursor: pointer;
+  color: var(--text-primary); padding: 0; text-align: left; font-size: 12.5px;
+  font-variant-numeric: tabular-nums; text-decoration: underline;
+  text-decoration-color: var(--border-strong); text-underline-offset: 3px;
+}
+.rowtoggle:hover { text-decoration-color: var(--series-1); }
+tr.detail > td { padding: 0 0 14px; white-space: normal; }
+.detailbox {
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px 14px; display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+.detailbox h4 { margin: 0 0 6px; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); }
+.detailbox ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.detailbox li { font-size: 12px; color: var(--text-secondary); display: flex; gap: 8px; }
+.detailbox li .ref { color: var(--text-muted); flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.detailbox .kv { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
+.detailbox .kv span:last-child { font-variant-numeric: tabular-nums; color: var(--text-primary); }
+
+/* ============================================================================
+   STATUS CHIPS — status colour never travels alone; icon + label always
+   ========================================================================== */
+.chip {
+  display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto;
+  font-size: 11px; font-weight: 600; letter-spacing: .02em;
+  padding: 2px 8px 2px 6px; border-radius: 999px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  color: var(--text-primary); white-space: nowrap;
+}
+.chip .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+.chip .icon { font-size: 10px; line-height: 1; }
+.chip.critical .dot { background: var(--status-critical); }
+.chip.serious  .dot { background: var(--status-serious); }
+.chip.watch    .dot { background: var(--status-warning); }
+.chip.good     .dot { background: var(--status-good); }
+
+/* ============================================================================
+   ACTION QUEUE
+   ========================================================================== */
+.queue { display: flex; flex-direction: column; }
+.qrow {
+  display: grid; gap: 4px 16px; padding: 12px 2px;
+  grid-template-columns: 104px minmax(0, 1fr) auto;
+  border-top: 1px solid var(--grid); align-items: baseline;
+}
+.qrow:first-child { border-top: 0; }
+.qrow .qtitle { font-size: 13px; font-weight: 600; }
+.qrow .qwhy { font-size: 12.5px; color: var(--text-secondary); grid-column: 2 / -1; max-width: 88ch; }
+.qrow .qmeta { font-size: 11.5px; color: var(--text-muted); grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.qrow .qmeta .cite { font-variant-numeric: tabular-nums; }
+.qrow .qval { font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+@media (max-width: 640px) {
+  .qrow { grid-template-columns: minmax(0, 1fr); }
+  .qrow .qwhy, .qrow .qmeta { grid-column: 1; }
+  .qrow .qval { text-align: left; }
+}
+.queue-more { margin-top: 12px; }
+.queue-empty { padding: 22px 2px; color: var(--text-secondary); font-size: 13px; }
+
+/* ============================================================================
+   AUDIT READINESS — meters
+   ========================================================================== */
+.meters { display: grid; gap: 20px 34px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); margin-top: 6px; }
+.meter .top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.meter .name { font-size: 12.5px; color: var(--text-secondary); }
+.meter .pct { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+/* The unfilled track is a lighter step of the fill's own ramp, so the meter's
+   state reads across the whole bar. --surface-2 is the fallback where
+   color-mix() is unavailable. */
+.meter .track {
+  height: 6px; border-radius: 3px; margin-top: 6px; overflow: hidden;
+  background: var(--surface-2);
+  background: var(--meter-track, var(--surface-2));
+}
+.meter .fill { height: 100%; border-radius: 3px; background: var(--meter-fill); }
+.meter .foot { font-size: 11.5px; color: var(--text-muted); margin-top: 7px; display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
+
+/* ============================================================================
+   TOOLTIP — one floating node, reused; text inserted with textContent only
+   ========================================================================== */
+#tip {
+  position: fixed; z-index: 40; pointer-events: none; opacity: 0;
+  transform: translate(-50%, -100%); transition: opacity .1s;
+  background: var(--surface-1); border: 1px solid var(--border-strong);
+  border-radius: 8px; padding: 8px 10px; box-shadow: 0 4px 14px rgba(0,0,0,.14);
+  font-size: 12px; max-width: 280px;
+}
+#tip[data-show="1"] { opacity: 1; }
+#tip .tip-title { font-size: 11.5px; color: var(--text-secondary); margin-bottom: 5px; }
+#tip .tip-row { display: flex; align-items: baseline; gap: 8px; margin-top: 3px; }
+#tip .tip-key { width: 14px; height: 2px; border-radius: 1px; flex: 0 0 auto; transform: translateY(-3px); }
+#tip .tip-val { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-primary); }
+#tip .tip-name { color: var(--text-secondary); }
+
+/* ============================================================================
+   FOOTNOTES
+   ========================================================================== */
+.notes { margin-top: 34px; font-size: 12px; color: var(--text-muted); max-width: 92ch; }
+.notes h2 { font-size: 12.5px; color: var(--text-secondary); margin-bottom: 6px; }
+.notes p { margin-bottom: 7px; }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-inner">
+    <div class="masthead-titles">
+      <h1>Trade compliance posture</h1>
+      <p class="sub">Export authorizations and classification of record &mdash; ITAR (22 CFR 120&ndash;130) and EAR (15 CFR 730&ndash;774)</p>
+    </div>
+    <div class="masthead-meta">
+      <span class="asof" id="asof-chip"></span>
+      <button class="btn" id="theme-toggle" type="button" aria-live="polite">Dark theme</button>
+    </div>
+  </div>
+  <div class="masthead-inner" style="padding-top:0">
+    <div style="flex:1 1 100%">
+      <p class="synthetic">
+        <strong>Proof of concept.</strong>
+        <span>Every program, part number, authorization number, foreign party and determination on this page is synthetic and generated in the browser. Nothing here is a compliance record.</span>
+      </p>
+      <div class="tabs" role="tablist" aria-label="Dashboard views">
+        <button class="tab" role="tab" id="tab-posture" aria-controls="view-posture" aria-selected="true" type="button">Posture</button>
+        <button class="tab" role="tab" id="tab-auth" aria-controls="view-auth" aria-selected="false" type="button">Authorizations</button>
+        <button class="tab" role="tab" id="tab-class" aria-controls="view-class" aria-selected="false" type="button">Classification</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <!-- One filter row, above everything it scopes. Every tile, chart, queue row
+       and table below re-derives against the same slice. -->
+  <div class="filters" id="filters">
+    <label class="field"><span>Program</span><select id="f-program"></select></label>
+    <label class="field"><span>Site</span><select id="f-site"></select></label>
+    <label class="field"><span>Regime</span><select id="f-regime"></select></label>
+    <button class="btn" id="f-reset" type="button" hidden>Clear filters</button>
+    <p class="filter-note" id="filter-note"></p>
+  </div>
+
+  <section id="view-posture" role="tabpanel" aria-labelledby="tab-posture"></section>
+  <section id="view-auth" role="tabpanel" aria-labelledby="tab-auth" hidden></section>
+  <section id="view-class" role="tabpanel" aria-labelledby="tab-class" hidden></section>
+
+  <div class="notes">
+    <h2>Notes</h2>
+    <p><strong>Citations locate the obligation; they are not legal advice.</strong> The thresholds applied here &mdash; 85% value utilization, a 90-day expiry window, a 90-day classification service level and a 3-year re-review cycle &mdash; are illustrative internal policy settings, not regulatory deadlines. Recordkeeping references are 22 CFR 122.5 (ITAR, five years) and 15 CFR 762 (EAR, five years); the disclosure reference is 22 CFR 127.12.</p>
+    <p id="note-scope"></p>
+  </div>
+</main>
+
+<div id="tip" role="status" aria-live="polite"></div>
+
+<script>
+"use strict";
+/* ============================================================================
+   POLICY SETTINGS
+   Illustrative internal policy, not regulatory deadlines. Every threshold the
+   dashboard applies is named here so a reviewer can see what "at risk" means
+   before reading a single number.
+   ========================================================================== */
+const REVIEW_CYCLE_YEARS = 3;          // determinations are re-reviewed on this cycle
+const POLICY = {
+  EXPIRY_WINDOW_DAYS:       90,        // "expiring soon" horizon
+  UTILIZATION_THRESHOLD:    0.85,      // value consumed at which an amendment is due
+  AMENDMENT_RUNWAY_MONTHS:  6,         // remaining term that makes high utilization urgent
+  PROVISO_ESCALATION:       3,         // unacknowledged provisos that escalate to serious
+  CLASSIFICATION_SLA_DAYS:  90,        // age at which an undetermined part escalates
+  ADJUDICATION_NORMAL_DAYS: 60,        // expected licensing decision window
+  TURNAROUND_TRAILING_DAYS: 90,        // window for the median turnaround measure
+};
+
+/* ============================================================================
+   UTILITIES
+   All dates are handled in UTC so the page derives identically in every
+   timezone — the same reason the generator is seeded.
+   ========================================================================== */
+const DAY = 86400000;
+const utc = (y, m, d) => new Date(Date.UTC(y, m, d));
+const addDays = (d, n) => new Date(d.getTime() + n * DAY);
+const addMonths = (d, n) => utc(d.getUTCFullYear(), d.getUTCMonth() + n, d.getUTCDate());
+const addYears = (d, n) => utc(d.getUTCFullYear() + n, d.getUTCMonth(), d.getUTCDate());
+const daysBetween = (a, b) => Math.round((b.getTime() - a.getTime()) / DAY);
+const startOfMonth = (d) => utc(d.getUTCFullYear(), d.getUTCMonth(), 1);
+const endOfMonth = (d) => utc(d.getUTCFullYear(), d.getUTCMonth() + 1, 0);
+const sameMonth = (a, b) => a.getUTCFullYear() === b.getUTCFullYear() && a.getUTCMonth() === b.getUTCMonth();
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const fmtDate = (d) => d ? `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}` : '—';
+const fmtMonYear = (d) => `${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+/* Axis labels are month-only, except January, which carries the year so a
+   12-month axis crossing a year boundary is never ambiguous. */
+const fmtAxisMonth = (d) => (d.getUTCMonth() === 0 ? `Jan ${String(d.getUTCFullYear()).slice(2)}` : MONTHS[d.getUTCMonth()]);
+
+const fmtInt = (n) => Math.round(n).toLocaleString('en-US');
+const fmtPct = (x, dp = 0) => `${(x * 100).toFixed(dp)}%`;
+const fmtUsdFull = (n) => `$${Math.round(n).toLocaleString('en-US')}`;
+function fmtUsd(n) {
+  const a = Math.abs(n);
+  if (a >= 1e9) return `$${(n / 1e9).toFixed(1)}B`;
+  if (a >= 1e6) return `$${(n / 1e6).toFixed(a >= 1e7 ? 0 : 1)}M`;
+  if (a >= 1e3) return `$${Math.round(n / 1e3)}K`;
+  return `$${Math.round(n)}`;
+}
+function median(xs) {
+  if (!xs.length) return null;
+  const s = xs.slice().sort((a, b) => a - b);
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+const sum = (xs) => xs.reduce((a, b) => a + b, 0);
+function groupBy(xs, key) {
+  const m = new Map();
+  for (const x of xs) {
+    const k = key(x);
+    if (!m.has(k)) m.set(k, []);
+    m.get(k).push(x);
+  }
+  return m;
+}
+
+/* ============================================================================
+   ===== MOCK DATA LAYER — replace this entire section with a real feed =====
+   ----------------------------------------------------------------------------
+   Everything below this banner exists only to stand up the page without a
+   back end. It ends at the matching END banner and exposes exactly one object:
+
+     DATA = { asOf: Date, authorizations: Authorization[], classifications: Part[] }
+
+   Point DATA at a real feed — SAP GTS, Descartes, OCR, or an internal export
+   management system — and every derivation, chart, table and action rule below
+   this section works unchanged. The two schemas are the integration contract:
+
+   ── Authorization ──────────────────────────────────────────────────────────
+     id                  string   authorization / agreement number, as issued
+     kind                string   'DSP-5' | 'DSP-73' | 'TAA' | 'MLA' | 'WDA' | 'BIS'
+     kindLabel           string   human-readable form of `kind`
+     regime              string   'ITAR' | 'EAR'
+     temporary           boolean  true when items must return (e.g. DSP-73)
+     status              string   'In adjudication' | 'Issued'
+                                  Expiry is NOT a status — "live", "expired" and
+                                  "fully consumed" are all derived from expiresOn
+                                  and the shipment history.
+     program             string   internal program name
+     site                string   responsible facility
+     submittedOn         Date     date the application left the company
+     issuedOn            Date|null  date the authorization was granted
+     expiresOn           Date|null  expiration date on the face of the authorization
+     authorizedValueUsd  number   value authorized on the face of the authorization
+     destinations        string[] destination countries
+     region              string   destination region, for the value-by-region roll-up
+     foreignParties      [{ name: string, role: string, country: string }]
+     provisos            [{ ref: string, text: string, acknowledgedOn: Date|null }]
+                                  acknowledgedOn === null means "not acknowledged"
+     shipments           [{ date: Date, valueUsd: number, ref: string }]
+                                  shippedValue is summed from this array, never stored
+     partNumbers         string[] item-master keys, joining to Part.partNumber
+     recordsOnFile       boolean  supporting records retained (22 CFR 122.5 / 15 CFR 762)
+     itemsReconciledOn   Date|null  temporary exports only: date items were reconciled
+                                    as returned. null on an expired temporary
+                                    authorization is the critical case.
+
+   ── Part (jurisdiction & classification determination) ─────────────────────
+     partNumber          string   item-master key
+     nomenclature        string   plain description
+     program             string   internal program name
+     site                string   responsible facility
+     addedOn             Date     date the part entered the item master
+     jurisdiction        string|null  'ITAR' | 'EAR' | 'Not subject'
+                                      null means no determination of record — this
+                                      is what "coverage" measures
+     controlCode         string|null  USML category, ECCN, or 'EAR99'
+     determinedOn        Date|null    date of the determination of record
+     determinedBy        string|null  analyst of record
+     method              string|null  'Self-determination' | 'Commodity jurisdiction (CJ)'
+                                      | 'CCATS' | 'Order of review'
+     basisOnFile         boolean      written basis retained for the determination
+     reviewDueOn         Date|null    date the determination is next due for
+                                      re-review. Carried as its own field, not
+                                      derived: a completed re-review pushes it
+                                      forward without changing determinedOn, so
+                                      it is not always determinedOn +
+                                      REVIEW_CYCLE_YEARS. The generator seeds it
+                                      from that constant.
+   ========================================================================== */
+
+const DATA = (function buildMockData() {
+
+  /* Seeded PRNG. The dataset is therefore identical on every load and for
+     every viewer, which keeps a demo reproducible and diffs meaningful. */
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  const rnd = mulberry32(0x5A17C0DE);
+  const pick = (xs) => xs[Math.floor(rnd() * xs.length)];
+  const int = (lo, hi) => lo + Math.floor(rnd() * (hi - lo + 1));
+  const chance = (p) => rnd() < p;
+  const gauss = () => (rnd() + rnd() + rnd() + rnd() - 2) / 0.816;
+  function weighted(items) {
+    const total = sum(items.map((i) => i.w));
+    let r = rnd() * total;
+    for (const i of items) { r -= i.w; if (r <= 0) return i; }
+    return items[items.length - 1];
+  }
+  function sample(xs, n) {
+    const pool = xs.slice(), out = [];
+    while (out.length < n && pool.length) out.push(pool.splice(Math.floor(rnd() * pool.length), 1)[0]);
+    return out;
+  }
+  const pad = (n, w) => String(n).padStart(w, '0');
+
+  /* Fixed point of reference. A real feed supplies its own extract timestamp. */
+  const asOf = utc(2026, 5, 30);
+
+  const PROGRAMS = [
+    { name: 'Kestrel II',       site: 'Everett, WA' },
+    { name: 'Sentinel Radar',   site: 'Everett, WA' },
+    { name: 'Longbow ASE',      site: 'Huntsville, AL' },
+    { name: 'Halberd MRO',      site: 'Huntsville, AL' },
+    { name: 'Talon-X UAS',      site: 'Fort Worth, TX' },
+    { name: 'Vanguard Trainer', site: 'Fort Worth, TX' },
+    { name: 'Meridian SATCOM',  site: 'Torrance, CA' },
+    { name: 'Corvus EW Suite',  site: 'Torrance, CA' },
+  ];
+
+  const REGIONS = [
+    { region: 'Europe',        w: 34, countries: ['United Kingdom', 'Germany', 'France', 'Italy', 'Norway', 'Poland', 'Spain', 'Netherlands'] },
+    { region: 'Indo-Pacific',  w: 27, countries: ['Japan', 'Australia', 'Korea, Republic of', 'Singapore', 'India', 'New Zealand'] },
+    { region: 'Middle East',   w: 16, countries: ['Israel', 'United Arab Emirates', 'Saudi Arabia', 'Qatar', 'Kuwait'] },
+    { region: 'North America', w: 15, countries: ['Canada', 'Mexico'] },
+    { region: 'Latin America', w: 8,  countries: ['Brazil', 'Chile', 'Colombia'] },
+  ];
+
+  const KINDS = [
+    { kind: 'DSP-5',  kindLabel: 'DSP-5 permanent export',              regime: 'ITAR', termYears: 4,  temporary: false, w: 30 },
+    { kind: 'DSP-73', kindLabel: 'DSP-73 temporary export',             regime: 'ITAR', termYears: 4,  temporary: true,  w: 11 },
+    { kind: 'TAA',    kindLabel: 'Technical assistance agreement',      regime: 'ITAR', termYears: 10, temporary: false, w: 15 },
+    { kind: 'MLA',    kindLabel: 'Manufacturing license agreement',     regime: 'ITAR', termYears: 10, temporary: false, w: 6 },
+    { kind: 'WDA',    kindLabel: 'Warehouse and distribution agreement', regime: 'ITAR', termYears: 10, temporary: false, w: 4 },
+    { kind: 'BIS',    kindLabel: 'BIS export license',                  regime: 'EAR',  termYears: 4,  temporary: false, w: 26 },
+  ];
+
+  const PARTIES = [
+    'Aeronautica Vittore S.p.A.', 'Nordkap Systems AS', 'Meridian Defence Ltd',
+    'Kyushu Precision K.K.', 'Baltic Avionics Sp. z o.o.', 'Cedar Ridge Aerospace Pty Ltd',
+    'Han River Dynamics Co.', 'Levant Technical Services LLC', 'Maple Ridge Integration Inc.',
+    'Iberia Sistemas S.L.', 'Rhine Aerostructures GmbH', 'Coral Sea Logistics Pty Ltd',
+    'Sagara Instruments K.K.', 'Vistula Composites S.A.', 'Anzac Sustainment Group Pty Ltd',
+  ];
+  const PARTY_ROLES = ['End-user', 'Consignee', 'Intermediate consignee', 'Sublicensee', 'Foreign signatory'];
+
+  const PROVISO_TEXTS = [
+    'The applicant shall provide a copy of the executed end-user certificate prior to the first shipment.',
+    'The commodities authorized may not be re-exported or retransferred without prior written approval.',
+    'Hardware exported under this authorization shall be returned to the United States on or before the expiration date.',
+    'Technical data is limited to the level required for maintenance and repair; design and development data is excluded.',
+    'The applicant shall report any change in the parties named to the licensing authority within 30 days.',
+    'No classified information of United States origin is authorized under this approval.',
+    'The value authorized may not be exceeded without an approved amendment.',
+    'Records of all shipments made under this authorization shall be retained for five years.',
+    'Exports shall be made through a port and carrier identified in the electronic export information filing.',
+    'Defense services are limited to those described in the approved statement of work.',
+    'The foreign signatory shall not transfer the authorized articles to a third country without prior approval.',
+    'An annual report of sales and transfers made under this agreement is required.',
+  ];
+
+  const NOMENCLATURE = [
+    'Actuator, flight control', 'Wire harness assembly', 'Gyroscope, rate sensor',
+    'Transmit/receive module', 'Antenna, phased array', 'Radome assembly',
+    'Bearing, main rotor', 'Power supply, 28 VDC', 'Cryocooler assembly',
+    'Display unit, ruggedized', 'Fastener, structural', 'Bracket, avionics tray',
+    'Filter, RF bandpass', 'Cable assembly, coaxial', 'Software, mission planning',
+    'Firmware, signal processor', 'Housing, gearbox', 'Seal, hydraulic',
+    'Valve, fuel metering', 'Igniter assembly', 'Panel, composite skin',
+    'Connector, circular', 'Amplifier, solid state', 'Inertial measurement unit',
+    'Encoder, optical', 'Servo controller', 'Test set, line replaceable unit',
+    'Blanket, thermal', 'Battery, lithium-ion', 'Pump, hydraulic',
+    'Manifold, environmental control', 'Waveguide assembly', 'Gimbal, sensor turret',
+    'Receiver, GPS', 'Transformer, power conditioning',
+  ];
+
+  const USML = ['IV(h)', 'VIII(h)', 'VIII(i)', 'IX(d)', 'XI(a)(3)', 'XI(c)(1)', 'XI(c)(4)', 'XII(e)', 'XV(e)(1)', 'I(h)'];
+  const ECCN_CONTROLLED = ['9A610.a', '9A610.x', '9E610', '9D610', '7A994', '7A103.a', '3A991.a.1', '5A991', '6A003.b.4'];
+  const ANALYSTS = ['R. Okonjo', 'M. Vargas', 'D. Feldman', 'T. Alderete', 'K. S. Rao', 'J. Whitfield', 'A. Lindqvist'];
+  const METHODS = [
+    { m: 'Self-determination', w: 62 },
+    { m: 'Order of review', w: 18 },
+    { m: 'Commodity jurisdiction (CJ)', w: 11 },
+    { m: 'CCATS', w: 9 },
+  ];
+
+  /* ---- Parts (item master) ------------------------------------------------ */
+  /* A program's hardware clusters into one or two control categories rather
+     than scattering across the list — a radar program is mostly Category XI,
+     an airframe mostly VIII. Drawing codes uniformly would flatten the
+     concentration chart into ten equal bars and quietly contradict the point
+     it is making. */
+  const programControls = new Map(PROGRAMS.map((p) => [p.name, { usml: pick(USML), eccn: pick(ECCN_CONTROLLED) }]));
+
+  const parts = [];
+  const PART_COUNT = 780;
+  for (let i = 0; i < PART_COUNT; i++) {
+    const prog = pick(PROGRAMS);
+    const partNumber = `${String.fromCharCode(65 + int(0, 5))}${int(10, 89)}-${pad(int(1000, 9999), 4)}-${pad(int(1, 60), 2)}`;
+
+    /* Undetermined parts skew recent: a healthy queue is mostly new work, with
+       a tail that has aged past the service level. */
+    /* For a determined part the determination date is drawn first and the part
+       is placed into the item master a working lag earlier. Drawing it the
+       other way round forces every recently-added part to be determined
+       immediately, which puts a spike on the end of the throughput chart that
+       is an artefact of the generator and nothing else. */
+    const determined = chance(0.865);
+    const determinedOn = determined ? addDays(asOf, -int(1, 2050)) : null;
+    const addedOn = determined
+      ? addDays(determinedOn, -int(3, 70))
+      : addDays(asOf, -(chance(0.5) ? int(1, 90) : int(91, 700)));
+
+    if (!determined) {
+      parts.push({
+        partNumber, nomenclature: pick(NOMENCLATURE), program: prog.name, site: prog.site,
+        addedOn, jurisdiction: null, controlCode: null, determinedOn: null,
+        determinedBy: null, method: null, basisOnFile: false, reviewDueOn: null,
+      });
+      continue;
+    }
+
+    /* A completed re-review pushes the next due date forward without changing
+       the determination of record, so reviewDueOn is carried as its own field
+       rather than always being determinedOn + the cycle. The parts where that
+       push never happened are what the stale-determination rule surfaces. */
+    let reviewDueOn = addYears(determinedOn, REVIEW_CYCLE_YEARS);
+    while (reviewDueOn <= asOf && chance(0.9)) reviewDueOn = addYears(reviewDueOn, REVIEW_CYCLE_YEARS);
+
+    const primary = programControls.get(prog.name);
+    const roll = rnd();
+    let jurisdiction, controlCode;
+    if (roll < 0.44) { jurisdiction = 'ITAR'; controlCode = chance(0.58) ? primary.usml : pick(USML); }
+    else if (roll < 0.72) { jurisdiction = 'EAR'; controlCode = chance(0.52) ? primary.eccn : pick(ECCN_CONTROLLED); }
+    else if (roll < 0.94) { jurisdiction = 'EAR'; controlCode = 'EAR99'; }
+    else { jurisdiction = 'Not subject'; controlCode = null; }
+
+    parts.push({
+      partNumber, nomenclature: pick(NOMENCLATURE), program: prog.name, site: prog.site,
+      addedOn, jurisdiction, controlCode, determinedOn,
+      determinedBy: pick(ANALYSTS),
+      method: weighted(METHODS.map((x) => ({ ...x, w: x.w }))).m,
+      /* A written basis is the weak point in practice, and weakest on the
+         self-determined ITAR calls that most need one. */
+      basisOnFile: jurisdiction === 'ITAR' ? chance(0.92) : chance(0.97),
+      reviewDueOn,
+    });
+  }
+  const partsByProgram = groupBy(parts, (p) => p.program);
+
+  /* ---- Authorizations ----------------------------------------------------- */
+  const authorizations = [];
+  const AUTH_COUNT = 380;
+  const seqs = { 'DSP-5': 2418006, 'DSP-73': 731204, TAA: 2610, MLA: 1142, WDA: 318, BIS: 480311 };
+
+  for (let i = 0; i < AUTH_COUNT; i++) {
+    const k = weighted(KINDS);
+    const prog = pick(PROGRAMS);
+    const reg = weighted(REGIONS);
+    const destCount = k.kind === 'WDA' || k.kind === 'MLA' ? int(2, 4) : (chance(0.25) ? 2 : 1);
+    const destinations = sample(reg.countries, Math.min(destCount, reg.countries.length));
+
+    seqs[k.kind] += int(3, 41);
+    const yy = String(asOf.getUTCFullYear()).slice(2);
+    const id = k.kind === 'DSP-5' ? `DSP5-${pad(seqs[k.kind], 7)}`
+      : k.kind === 'DSP-73' ? `DSP73-${pad(seqs[k.kind], 7)}`
+      : k.kind === 'TAA' ? `TA-${pad(seqs[k.kind], 4)}-${yy}`
+      : k.kind === 'MLA' ? `ML-${pad(seqs[k.kind], 4)}-${yy}`
+      : k.kind === 'WDA' ? `WD-${pad(seqs[k.kind], 4)}-${yy}`
+      : `BIS-D${pad(seqs[k.kind], 7)}`;
+
+    /* Turnaround is the gap between submission and issuance. ITAR agreements
+       take materially longer than a hardware licence, which is why the
+       turnaround chart splits by regime. */
+    const baseTurn = k.kind === 'TAA' || k.kind === 'MLA' || k.kind === 'WDA' ? 56
+      : k.regime === 'ITAR' ? 33 : 26;
+    const turnaround = Math.max(12, Math.round(baseTurn + gauss() * (baseTurn * 0.34) + (chance(0.09) ? int(40, 130) : 0)));
+
+    /* 8% of the portfolio is still in adjudication; a few of those are past
+       the normal decision window and are probably sitting on an RFI. */
+    if (chance(0.08)) {
+      const submittedOn = addDays(asOf, -Math.round(Math.pow(rnd(), 0.72) * 165 + 4));
+      authorizations.push(makeAuth({
+        id, k, prog, reg, destinations, status: 'In adjudication',
+        submittedOn, issuedOn: null, expiresOn: null,
+      }));
+      continue;
+    }
+    /* Issuance is modelled as a steady state: applications go out at a roughly
+       constant rate, so issuance dates are spread uniformly across one full
+       term plus a tail. That is what makes the live population flat over the
+       trailing year instead of ramping — a portfolio that appears to double in
+       twelve months is the giveaway that a data set was reverse-engineered
+       from its own expiry chart. The expiry pipeline then falls out of the
+       term rather than being dialled in. */
+    const issuedOn = addDays(asOf, -int(0, k.termYears * 365 + 420));
+    const expiresOn = addYears(issuedOn, k.termYears);
+    const submittedOn = addDays(issuedOn, -turnaround);
+
+    authorizations.push(makeAuth({ id, k, prog, reg, destinations, status: 'Issued', submittedOn, issuedOn, expiresOn }));
+  }
+
+  function makeAuth({ id, k, prog, reg, destinations, status, submittedOn, issuedOn, expiresOn }) {
+    const authorizedValueUsd = Math.round(Math.exp(13.2 + gauss() * 1.25) / 1000) * 1000 + 40000;
+
+    const foreignParties = sample(PARTIES, int(1, 3)).map((name, idx) => ({
+      name, role: idx === 0 ? 'End-user' : pick(PARTY_ROLES), country: pick(destinations),
+    }));
+
+    /* Provisos accrue on agreements far more than on a one-off licence.
+       Acknowledgement discipline clusters by record rather than scattering
+       evenly: most authorizations are worked properly and a minority have
+       nobody closing the loop at all, which is what makes a three-or-more
+       finding a different problem from a one-or-two finding. */
+    const ackRate = chance(0.12) ? 0.35 : 0.95;
+    const provisoCount = status === 'Issued'
+      ? (k.kind === 'TAA' || k.kind === 'MLA' || k.kind === 'WDA' ? int(3, 8) : int(0, 5))
+      : 0;
+    const provisos = sample(PROVISO_TEXTS, Math.min(provisoCount, PROVISO_TEXTS.length)).map((text, idx) => ({
+      ref: `${idx + 1}`,
+      text,
+      acknowledgedOn: chance(ackRate) ? addDays(issuedOn || submittedOn, int(2, 90)) : null,
+    }));
+
+    /* Shipments realise a target utilization *over the authorization's whole
+       term*, front-loaded, and only those that have already happened are in
+       the record. Spreading them across the term instead of packing them into
+       the past is what keeps portfolio utilization flat over the trailing year
+       — pack them and every authorization looks fully drawn down the moment it
+       is issued, and the utilization trend rises for no reason but the shape
+       of the generator.
+       A minority burn their authorized value far faster than their term, which
+       is the condition the amendment-threshold rule exists to catch. */
+    const shipments = [];
+    if (status === 'Issued') {
+      const fastBurn = chance(0.2);
+      const u = rnd();
+      const target = fastBurn ? 0.78 + rnd() * 0.22
+        : u < 0.10 ? 0 : u < 0.62 ? rnd() * 0.55 : u < 0.88 ? 0.55 + rnd() * 0.3 : 0.85 + rnd() * 0.15;
+      const termSpan = Math.max(1, daysBetween(issuedOn, expiresOn));
+      const burnSpan = fastBurn ? termSpan * (0.12 + rnd() * 0.22) : termSpan;
+      const n = target === 0 ? 0 : Math.max(1, Math.min(16, Math.round(target * 14 + int(0, 3))));
+      let remaining = target * authorizedValueUsd;
+      for (let s = 0; s < n; s++) {
+        const share = s === n - 1 ? remaining : remaining * (0.25 + rnd() * 0.45);
+        remaining -= share;
+        shipments.push({
+          date: addDays(issuedOn, Math.round(Math.pow(rnd(), 1.7) * burnSpan)),
+          valueUsd: Math.max(1000, Math.round(share / 100) * 100),
+          ref: `EEI-${pad(int(100000, 999999), 6)}`,
+        });
+      }
+      /* Rounding each shipment to a whole hundred, with a floor under the
+         smallest, can push the summed total past the authorized value on a
+         low-value authorization. Scale it back so utilization over 100% only
+         ever means the one thing it should mean: value shipped against an
+         authorization that had none left, which the rules do flag. */
+      const drawn = sum(shipments.map((s) => s.valueUsd));
+      if (drawn > authorizedValueUsd) {
+        const k = authorizedValueUsd / drawn;
+        for (const s of shipments) s.valueUsd = Math.max(100, Math.floor(s.valueUsd * k / 100) * 100);
+      }
+
+      /* Anything dated after the extract has not happened yet, so it is not a
+         record. */
+      const kept = shipments.filter((s) => s.date <= asOf).sort((a, b) => a.date - b.date);
+      shipments.length = 0;
+      shipments.push(...kept);
+
+      /* A small number of records carry a shipment dated after expiry — the
+         case the critical rule exists to surface. */
+      if (expiresOn < asOf && daysBetween(expiresOn, asOf) > 50 && shipments.length && chance(0.18)) {
+        shipments.push({
+          date: addDays(expiresOn, int(3, 44)),
+          valueUsd: Math.round(authorizedValueUsd * (0.02 + rnd() * 0.06) / 100) * 100,
+          ref: `EEI-${pad(int(100000, 999999), 6)}`,
+        });
+      }
+    }
+
+    return {
+      id, kind: k.kind, kindLabel: k.kindLabel, regime: k.regime, temporary: k.temporary,
+      status, program: prog.name, site: prog.site, submittedOn, issuedOn, expiresOn,
+      authorizedValueUsd, destinations, region: reg.region, foreignParties, provisos, shipments,
+      partNumbers: sample((partsByProgram.get(prog.name) || []).map((p) => p.partNumber), int(2, 5)),
+      recordsOnFile: status === 'Issued' ? chance(0.935) : true,
+      /* Temporary exports must be reconciled as returned. Leaving that blank
+         after expiry is the single worst finding in this data set. */
+      itemsReconciledOn: !k.temporary || status !== 'Issued' ? null
+        : (expiresOn < asOf
+          ? (chance(0.45) ? addDays(expiresOn, -int(1, 120)) : null)
+          : (chance(0.2) ? addDays(issuedOn, int(30, Math.max(31, daysBetween(issuedOn, asOf)))) : null)),
+    };
+  }
+
+  return { asOf, authorizations, classifications: parts };
+})();
+
+/* ===== END MOCK DATA LAYER ================================================ */
+/* ============================================================================
+   DERIVATIONS
+   Nothing on the page is a stored number. Every tile, chart, queue row and
+   meter is computed here from the record set, which is why a filter change
+   recomputes all of them together and they always agree.
+
+   Each measure takes an `at` date so the same code produces both the current
+   figure and its 12-month trend: "as of `at`" means an authorization counts
+   only once it was issued, a shipment counts only once it happened, and a part
+   counts only once it entered the item master.
+   ========================================================================== */
+
+const shippedBy = (a, at) => sum(a.shipments.filter((s) => s.date <= at).map((s) => s.valueUsd));
+const shippedValue = (a) => sum(a.shipments.map((s) => s.valueUsd));
+const utilization = (a, at) => (a.authorizedValueUsd > 0 ? shippedBy(a, at) / a.authorizedValueUsd : 0);
+
+const isIssuedBy = (a, at) => a.issuedOn !== null && a.issuedOn <= at;
+const isPendingAt = (a, at) => a.submittedOn <= at && !isIssuedBy(a, at);
+
+/** Live = issued, unexpired, and not fully consumed. */
+const isLive = (a, at) => isIssuedBy(a, at) && a.expiresOn > at && shippedBy(a, at) < a.authorizedValueUsd;
+const liveAuths = (auths, at) => auths.filter((a) => isLive(a, at));
+
+const openProvisos = (a, at) => a.provisos.filter((p) => p.acknowledgedOn === null || p.acknowledgedOn > at);
+
+const knownParts = (parts, at) => parts.filter((p) => p.addedOn <= at);
+const determinedParts = (parts, at) => parts.filter((p) => p.determinedOn !== null && p.determinedOn <= at);
+const undeterminedParts = (parts, at) => knownParts(parts, at).filter((p) => p.determinedOn === null || p.determinedOn > at);
+
+/** Median days from submission to issuance over the trailing window. */
+function turnaroundMedian(auths, at, regime) {
+  const from = addDays(at, -POLICY.TURNAROUND_TRAILING_DAYS);
+  const xs = auths
+    .filter((a) => (!regime || a.regime === regime) && a.issuedOn && a.issuedOn > from && a.issuedOn <= at)
+    .map((a) => daysBetween(a.submittedOn, a.issuedOn));
+  return median(xs);
+}
+
+/** The six headline measures, evaluated at a point in time. */
+function measures(slice, at) {
+  const live = liveAuths(slice.authorizations, at);
+  const soon = live.filter((a) => daysBetween(at, a.expiresOn) <= POLICY.EXPIRY_WINDOW_DAYS);
+  const known = knownParts(slice.classifications, at);
+  const done = determinedParts(slice.classifications, at);
+  const authorized = sum(live.map((a) => a.authorizedValueUsd));
+  const shipped = sum(live.map((a) => shippedBy(a, at)));
+  return {
+    liveCount: live.length,
+    expiringCount: soon.length,
+    expiringAtRiskValue: sum(soon.map((a) => Math.max(0, a.authorizedValueUsd - shippedBy(a, at)))),
+    utilization: authorized > 0 ? shipped / authorized : 0,
+    authorizedValue: authorized,
+    openProvisoCount: sum(live.map((a) => openProvisos(a, at).length)),
+    coverage: known.length > 0 ? done.length / known.length : 0,
+    undeterminedCount: known.length - done.length,
+    partCount: known.length,
+    turnaround: turnaroundMedian(slice.authorizations, at),
+  };
+}
+
+/** The trailing 12 month-ends, oldest first, ending at the extract date. */
+function trendMonths(at) {
+  const out = [];
+  for (let i = 11; i >= 0; i--) {
+    const m = addMonths(startOfMonth(at), -i);
+    out.push(i === 0 ? at : endOfMonth(m));
+  }
+  return out;
+}
+
+/* ============================================================================
+   ACTION QUEUE RULES
+   Each rule is evaluated against the filtered record set and states, in plain
+   language, why the match matters. Citations locate the obligation; the
+   thresholds are the policy settings declared at the top of this script.
+   ========================================================================== */
+const SEVERITY_ORDER = ['critical', 'serious', 'watch'];
+/* Every status colour on the page travels with an icon and a label, so the
+   colour never carries the meaning on its own. `good` and `warning` are not
+   queue severities — they are the healthy end of the audit-readiness meters. */
+const SEVERITY_META = {
+  critical: { label: 'Critical', icon: '◆' },
+  serious:  { label: 'Serious',  icon: '▲' },
+  watch:    { label: 'Watch',    icon: '●' },
+  warning:  { label: 'Watch',    icon: '●' },
+  good:     { label: 'On track', icon: '✓' },
+};
+
+const RULES = [
+  {
+    key: 'temp-unreconciled',
+    severity: 'critical',
+    name: 'Temporary authorization expired with items not reconciled as returned',
+    run: (s, at) => s.authorizations
+      .filter((a) => a.temporary && a.status === 'Issued' && a.expiresOn <= at && a.itemsReconciledOn === null)
+      .map((a) => {
+        const overdue = daysBetween(a.expiresOn, at);
+        return {
+          subject: a.id, title: `${a.id} — temporary export not reconciled`,
+          why: `Items exported under a temporary authorization are still abroad ${overdue} days after it expired, with no record of their return. Until they are reconciled as returned or covered by a new authorization, they are abroad without one.`,
+          value: `${fmtInt(overdue)} days`, valueLabel: 'past expiry',
+          meta: [a.kindLabel, a.program, a.destinations.join(', '), `Expired ${fmtDate(a.expiresOn)}`],
+          cite: '22 CFR 123.5', rank: overdue, view: 'auth', focus: a.id,
+        };
+      }),
+  },
+  {
+    key: 'ship-after-expiry',
+    severity: 'critical',
+    name: 'Shipment recorded after authorization expiry',
+    run: (s, at) => s.authorizations
+      .filter((a) => a.expiresOn && a.expiresOn <= at)
+      .map((a) => ({ a, late: a.shipments.filter((sh) => sh.date > a.expiresOn && sh.date <= at) }))
+      .filter((x) => x.late.length > 0)
+      .map(({ a, late }) => ({
+        subject: a.id, title: `${a.id} — ${late.length === 1 ? 'shipment' : `${late.length} shipments`} recorded after expiry`,
+        why: `${late.length === 1 ? 'A shipment was' : `${late.length} shipments were`} recorded against this authorization after it expired, the last one ${daysBetween(a.expiresOn, late[late.length - 1].date)} days past the expiration date. Assess against the voluntary disclosure decision.`,
+        value: fmtUsd(sum(late.map((sh) => sh.valueUsd))), valueLabel: 'shipped after expiry',
+        meta: [a.kindLabel, a.program, a.destinations.join(', '), `Expired ${fmtDate(a.expiresOn)}`],
+        cite: '22 CFR 127.12', rank: sum(late.map((sh) => sh.valueUsd)), view: 'auth', focus: a.id,
+      })),
+  },
+  {
+    key: 'value-threshold',
+    severity: 'serious',
+    name: 'Authorized value consumed past the amendment threshold with term remaining',
+    run: (s, at) => liveAuths(s.authorizations, at)
+      .map((a) => ({ a, u: utilization(a, at), rem: daysBetween(at, a.expiresOn) }))
+      .filter((x) => x.u > POLICY.UTILIZATION_THRESHOLD && x.rem > POLICY.AMENDMENT_RUNWAY_MONTHS * 30.4)
+      .map(({ a, u, rem }) => ({
+        subject: a.id, title: `${a.id} — ${fmtPct(u)} of authorized value consumed`,
+        why: `${fmtUsd(a.authorizedValueUsd - shippedBy(a, at))} of authorized value remains against ${Math.round(rem / 30.4)} months of remaining term. The value will be exhausted long before the authorization expires, and an amendment takes longer to obtain than the remaining balance will cover.`,
+        value: fmtPct(u), valueLabel: 'consumed',
+        meta: [a.kindLabel, a.program, `${fmtUsd(a.authorizedValueUsd)} authorized`, `Expires ${fmtDate(a.expiresOn)}`],
+        cite: 'Policy: amendment at ' + fmtPct(POLICY.UTILIZATION_THRESHOLD), rank: u, view: 'auth', focus: a.id,
+      })),
+  },
+  {
+    key: 'provisos-3plus',
+    severity: 'serious',
+    name: 'Three or more provisos not acknowledged on a live authorization',
+    run: (s, at) => liveAuths(s.authorizations, at)
+      .map((a) => ({ a, open: openProvisos(a, at) }))
+      .filter((x) => x.open.length >= POLICY.PROVISO_ESCALATION)
+      .map(({ a, open }) => ({
+        subject: a.id, title: `${a.id} — ${open.length} provisos not acknowledged`,
+        why: `${open.length} of ${a.provisos.length} provisos on this live authorization have no acknowledgement date recorded. Unacknowledged provisos are the most common finding in a licensing audit, and the conditions bind whether or not anyone has read them.`,
+        value: `${open.length}`, valueLabel: `of ${a.provisos.length} provisos`,
+        meta: [a.kindLabel, a.program, `Issued ${fmtDate(a.issuedOn)}`],
+        cite: '22 CFR 123.9', rank: open.length, view: 'auth', focus: a.id,
+      })),
+  },
+  {
+    key: 'records-missing',
+    severity: 'serious',
+    name: 'Supporting records not on file',
+    run: (s, at) => s.authorizations
+      .filter((a) => isIssuedBy(a, at) && !a.recordsOnFile && daysBetween(a.expiresOn, at) < 5 * 365)
+      .map((a) => ({
+        subject: a.id, title: `${a.id} — supporting records not on file`,
+        why: `No supporting record set is retained for this authorization. Five-year retention applies from the date of the transaction, and the records are what an audit examines first — their absence is a finding on its own, independent of whether the exports were properly authorized.`,
+        value: a.expiresOn > at ? 'Live' : 'Expired', valueLabel: a.expiresOn > at ? `expires ${fmtDate(a.expiresOn)}` : fmtDate(a.expiresOn),
+        meta: [a.kindLabel, a.program, `${a.shipments.length} shipments recorded`],
+        cite: a.regime === 'ITAR' ? '22 CFR 122.5' : '15 CFR 762', rank: shippedValue(a), view: 'auth', focus: a.id,
+      })),
+  },
+  {
+    key: 'part-overdue',
+    severity: 'serious',
+    name: 'Part in the item master past the classification service level',
+    run: (s, at) => undeterminedParts(s.classifications, at)
+      .map((p) => ({ p, age: daysBetween(p.addedOn, at) }))
+      .filter((x) => x.age >= POLICY.CLASSIFICATION_SLA_DAYS)
+      .map(({ p, age }) => ({
+        subject: p.partNumber, title: `${p.partNumber} — ${age} days without a determination`,
+        why: `This part has been in the item master ${age} days with no jurisdiction and classification determination of record. Until it has one it cannot be quoted for export, shipped, or disclosed to a foreign national, and any movement of it is unassessed.`,
+        value: `${age} days`, valueLabel: 'in queue',
+        meta: [p.nomenclature, p.program, `Added ${fmtDate(p.addedOn)}`],
+        cite: `Policy: ${POLICY.CLASSIFICATION_SLA_DAYS}-day service level`, rank: age, view: 'class', focus: p.partNumber,
+      })),
+  },
+  {
+    key: 'itar-no-basis',
+    severity: 'serious',
+    name: 'ITAR determination with no written basis retained',
+    run: (s, at) => determinedParts(s.classifications, at)
+      .filter((p) => p.jurisdiction === 'ITAR' && !p.basisOnFile)
+      .map((p) => ({
+        subject: p.partNumber, title: `${p.partNumber} — USML ${p.controlCode} with no written basis`,
+        why: `This part is controlled on the U.S. Munitions List with no written basis retained for the determination. An unsupported determination does not survive an audit, and it cannot be defended or re-used when the part is re-reviewed.`,
+        value: p.controlCode, valueLabel: 'USML category',
+        meta: [p.nomenclature, p.program, `${p.method}, ${fmtDate(p.determinedOn)}`],
+        cite: '22 CFR 120.10', rank: -p.determinedOn.getTime(), view: 'class', focus: p.partNumber,
+      })),
+  },
+  {
+    key: 'review-overdue',
+    severity: 'watch',
+    name: 'Determination past its re-review date',
+    run: (s, at) => determinedParts(s.classifications, at)
+      .filter((p) => p.reviewDueOn && p.reviewDueOn <= at)
+      .map((p) => {
+        const overdue = daysBetween(p.reviewDueOn, at);
+        return {
+          subject: p.partNumber, title: `${p.partNumber} — determination ${fmtInt(overdue)} days past re-review`,
+          why: `The determination of record was made ${fmtDate(p.determinedOn)} and passed its ${REVIEW_CYCLE_YEARS}-year re-review date ${fmtInt(overdue)} days ago. Control lists and product configurations both move; a determination that is never revisited quietly becomes the wrong one.`,
+          value: `${fmtInt(overdue)} days`, valueLabel: 'past due',
+          meta: [p.nomenclature, p.program, `${p.jurisdiction}${p.controlCode ? ' · ' + p.controlCode : ''}`],
+          cite: `Policy: ${REVIEW_CYCLE_YEARS}-year cycle`, rank: overdue, view: 'class', focus: p.partNumber,
+        };
+      }),
+  },
+  {
+    key: 'adjudication-stalled',
+    severity: 'watch',
+    name: 'Authorization in adjudication beyond the normal window',
+    run: (s, at) => s.authorizations
+      .filter((a) => isPendingAt(a, at))
+      .map((a) => ({ a, age: daysBetween(a.submittedOn, at) }))
+      .filter((x) => x.age > POLICY.ADJUDICATION_NORMAL_DAYS)
+      .map(({ a, age }) => ({
+        subject: a.id, title: `${a.id} — ${age} days in adjudication`,
+        why: `Submitted ${fmtDate(a.submittedOn)} and still undecided at ${age} days, beyond the ${POLICY.ADJUDICATION_NORMAL_DAYS}-day window this portfolio normally sees. Cases that sit this long are usually on hold pending a request for information that has not been answered.`,
+        value: `${age} days`, valueLabel: 'since submission',
+        meta: [a.kindLabel, a.program, a.destinations.join(', '), `${fmtUsd(a.authorizedValueUsd)} requested`],
+        cite: `Policy: ${POLICY.ADJUDICATION_NORMAL_DAYS}-day window`, rank: age, view: 'auth', focus: a.id,
+      })),
+  },
+  {
+    key: 'provisos-few',
+    severity: 'watch',
+    name: 'One or two provisos not acknowledged',
+    run: (s, at) => liveAuths(s.authorizations, at)
+      .map((a) => ({ a, open: openProvisos(a, at) }))
+      .filter((x) => x.open.length >= 1 && x.open.length < POLICY.PROVISO_ESCALATION)
+      .map(({ a, open }) => ({
+        subject: a.id, title: `${a.id} — ${open.length} proviso${open.length > 1 ? 's' : ''} not acknowledged`,
+        why: `${open.length} proviso${open.length > 1 ? 's have' : ' has'} no acknowledgement date recorded against this live authorization. The same exposure as a larger gap, at lower volume — the condition binds regardless.`,
+        value: `${open.length}`, valueLabel: `of ${a.provisos.length} provisos`,
+        meta: [a.kindLabel, a.program, `Issued ${fmtDate(a.issuedOn)}`],
+        cite: '22 CFR 123.9', rank: open.length, view: 'auth', focus: a.id,
+      })),
+  },
+];
+
+/**
+ * Evaluate every rule, then order the queue.
+ *
+ * Severity orders the queue, but within a severity tier the rule kinds are
+ * dealt out round-robin. One rule matching forty records would otherwise fill
+ * the visible queue and bury the other nine — which is exactly the failure the
+ * queue exists to prevent.
+ */
+function buildQueue(slice, at) {
+  const byRule = RULES.map((r) => ({
+    rule: r,
+    items: r.run(slice, at)
+      .sort((x, y) => y.rank - x.rank)
+      .map((it) => ({ ...it, severity: r.severity, ruleKey: r.key, ruleName: r.name })),
+  }));
+
+  const counts = new Map(byRule.map((b) => [b.rule.key, b.items.length]));
+  const total = sum([...counts.values()]);
+  const bySeverity = Object.fromEntries(SEVERITY_ORDER.map((sv) => [
+    sv, sum(byRule.filter((b) => b.rule.severity === sv).map((b) => b.items.length)),
+  ]));
+
+  const ordered = [];
+  for (const sv of SEVERITY_ORDER) {
+    const lanes = byRule.filter((b) => b.rule.severity === sv && b.items.length).map((b) => b.items.slice());
+    for (let i = 0; lanes.some((l) => l.length); i++) {
+      for (const lane of lanes) if (lane.length) ordered.push(lane.shift());
+    }
+  }
+  return { items: ordered, total, counts, bySeverity };
+}
+
+/* ============================================================================
+   AUDIT READINESS
+   Whether the supporting paper exists — deliberately independent of whether
+   the underlying decision was right. A determination can be correct and still
+   be unevidenced, and only one of those two problems is visible here.
+   ========================================================================== */
+function auditReadiness(slice, at) {
+  const live = liveAuths(slice.authorizations, at);
+  const provisos = live.flatMap((a) => a.provisos);
+  const done = determinedParts(slice.classifications, at);
+  const itar = done.filter((p) => p.jurisdiction === 'ITAR');
+
+  const rows = [
+    {
+      name: 'Authorization records on file',
+      have: live.filter((a) => a.recordsOnFile).length, of: live.length,
+      unit: 'live authorizations', foot: 'Five-year retention — 22 CFR 122.5, 15 CFR 762',
+    },
+    {
+      name: 'Proviso acknowledgements recorded',
+      have: provisos.filter((p) => p.acknowledgedOn !== null && p.acknowledgedOn <= at).length, of: provisos.length,
+      unit: 'provisos on live authorizations', foot: 'Acknowledgement date captured against the condition',
+    },
+    {
+      name: 'ITAR determinations with a written basis',
+      have: itar.filter((p) => p.basisOnFile).length, of: itar.length,
+      unit: 'ITAR-controlled parts', foot: 'Basis retained and retrievable for the determination of record',
+    },
+    {
+      name: 'Determinations within the re-review cycle',
+      have: done.filter((p) => p.reviewDueOn && p.reviewDueOn > at).length, of: done.length,
+      unit: 'determinations of record', foot: `${REVIEW_CYCLE_YEARS}-year re-review cycle`,
+    },
+  ];
+
+  return rows.map((r) => {
+    const pct = r.of > 0 ? r.have / r.of : 1;
+    const status = pct >= 0.95 ? 'good' : pct >= 0.90 ? 'warning' : pct >= 0.80 ? 'serious' : 'critical';
+    return { ...r, pct, status };
+  });
+}
+/* ============================================================================
+   CHART TOOLKIT
+   Hand-rolled SVG — no library, no network. The mark specs are fixed across
+   every chart on the page: bars capped at 24px with a 4px rounded data-end and
+   a square baseline, 2px lines, markers no smaller than 8px, a 2px surface gap
+   separating touching fills, a 2px surface ring on overlapping markers, and
+   hairline solid gridlines one step off the surface.
+
+   Colour comes from CSS custom properties, so a theme change re-reads the
+   tokens and redraws rather than trying to invert anything.
+   ========================================================================== */
+
+const SVGNS = 'http://www.w3.org/2000/svg';
+const FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+
+function svg(tag, attrs = {}, kids = []) {
+  const n = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v === null || v === undefined) continue;
+    n.setAttribute(k, String(v));
+  }
+  for (const kid of [].concat(kids)) if (kid) n.appendChild(kid);
+  return n;
+}
+function html(tag, attrs = {}, kids = []) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v === null || v === undefined) continue;
+    if (k === 'text') n.textContent = String(v);           // never innerHTML
+    else if (k === 'class') n.className = v;
+    else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
+    else n.setAttribute(k, String(v));
+  }
+  for (const kid of [].concat(kids)) if (kid) n.appendChild(kid);
+  return n;
+}
+function svgText(x, y, str, { size = 11, weight = 400, fill = 'var(--text-muted)', anchor = 'start', baseline = 'middle', tabular = true } = {}) {
+  const t = svg('text', {
+    x, y, fill, 'font-size': size, 'font-weight': weight, 'font-family': FONT,
+    'text-anchor': anchor, 'dominant-baseline': baseline,
+    style: tabular ? 'font-variant-numeric: tabular-nums' : null,
+  });
+  t.textContent = str;
+  return t;
+}
+
+/* Text measurement, so a label is never placed where it will not fit. */
+const _measureCtx = document.createElement('canvas').getContext('2d');
+function textWidth(str, size = 11, weight = 400) {
+  _measureCtx.font = `${weight} ${size}px ${FONT}`;
+  return _measureCtx.measureText(String(str)).width;
+}
+
+const token = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+/** Bar / column geometry: rounded on the data-end only, square at the baseline. */
+function barPath(x, y, w, h, r, side) {
+  const rr = Math.max(0, Math.min(r, side === 'top' || side === 'bottom' ? w / 2 : h / 2, side === 'right' || side === 'left' ? w : h));
+  if (w <= 0 || h <= 0) return '';
+  if (side === 'right') {
+    return `M${x},${y} H${x + w - rr} A${rr},${rr} 0 0 1 ${x + w},${y + rr} V${y + h - rr} A${rr},${rr} 0 0 1 ${x + w - rr},${y + h} H${x} Z`;
+  }
+  if (side === 'top') {
+    return `M${x},${y + h} V${y + rr} A${rr},${rr} 0 0 1 ${x + rr},${y} H${x + w - rr} A${rr},${rr} 0 0 1 ${x + w},${y + rr} V${y + h} Z`;
+  }
+  return `M${x},${y} h${w} v${h} h${-w} Z`;
+}
+
+/** Axis ticks on clean numbers. */
+function niceTicks(max, count = 4) {
+  if (!(max > 0)) return [0, 1];
+  const raw = max / count;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const norm = raw / mag;
+  const step = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 2.5 ? 2.5 : norm <= 5 ? 5 : 10) * mag;
+  const out = [];
+  for (let v = 0; v <= max + step * 0.001; v += step) out.push(Number(v.toFixed(10)));
+  if (out[out.length - 1] < max) out.push(Number((out[out.length - 1] + step).toFixed(10)));
+  return out;
+}
+
+/* ---------------------------------------------------------------------------
+   Tooltip — one node, reused. Values lead, series names follow. Labels are
+   inserted with textContent, never by string concatenation into innerHTML.
+   ------------------------------------------------------------------------- */
+const tipNode = document.getElementById('tip');
+function showTip(clientX, clientY, title, rows) {
+  tipNode.textContent = '';
+  if (title) tipNode.appendChild(html('div', { class: 'tip-title', text: title }));
+  for (const r of rows) {
+    const row = html('div', { class: 'tip-row' });
+    if (r.color) row.appendChild(html('span', { class: 'tip-key', style: `background:${r.color}` }));
+    row.appendChild(html('span', { class: 'tip-val', text: r.value }));
+    if (r.name) row.appendChild(html('span', { class: 'tip-name', text: r.name }));
+    tipNode.appendChild(row);
+  }
+  const pad = 12;
+  tipNode.dataset.show = '1';
+  const rect = tipNode.getBoundingClientRect();
+  let x = clientX, y = clientY - pad;
+  x = Math.max(rect.width / 2 + 6, Math.min(window.innerWidth - rect.width / 2 - 6, x));
+  if (y - rect.height < 6) y = clientY + rect.height + pad;
+  tipNode.style.left = `${x}px`;
+  tipNode.style.top = `${y}px`;
+}
+function hideTip() { tipNode.dataset.show = '0'; }
+window.addEventListener('scroll', hideTip, { passive: true });
+
+/** Wire hover and keyboard focus to the same readout — focus shows what hover shows. */
+function attachHit(node, getTip) {
+  node.setAttribute('tabindex', '0');
+  node.setAttribute('role', 'img');
+  const at = (e) => {
+    const t = getTip();
+    if (!t) return;
+    if (e && e.clientX !== undefined && e.type !== 'focus') showTip(e.clientX, e.clientY, t.title, t.rows);
+    else {
+      const r = node.getBoundingClientRect();
+      showTip(r.left + r.width / 2, r.top + Math.min(r.height / 2, 40), t.title, t.rows);
+    }
+  };
+  node.addEventListener('pointermove', at);
+  node.addEventListener('pointerenter', at);
+  node.addEventListener('pointerleave', hideTip);
+  node.addEventListener('focus', at);
+  node.addEventListener('blur', hideTip);
+}
+
+/* ---------------------------------------------------------------------------
+   Figure shell — title, optional legend, the plot, and the table-view twin.
+   Every chart on the page carries the twin, so no value is reachable only by
+   hovering.
+   ------------------------------------------------------------------------- */
+const REDRAWS = [];
+function figure(spec) {
+  const card = html('section', { class: 'card fig' });
+  const head = html('div', { class: 'fig-head' });
+  const titles = html('div', { class: 't' }, [
+    html('h3', { text: spec.title }),
+    spec.subtitle ? html('p', { class: 's', text: spec.subtitle }) : null,
+  ]);
+  head.appendChild(titles);
+
+  const plot = html('div', { class: 'plot' });
+  const tableWrap = html('div', { class: 'tablewrap', hidden: 'hidden' });
+
+  const bChart = html('button', { type: 'button', text: 'Chart', 'aria-pressed': 'true' });
+  const bTable = html('button', { type: 'button', text: 'Table', 'aria-pressed': 'false' });
+  const setView = (mode) => {
+    const isChart = mode === 'chart';
+    bChart.setAttribute('aria-pressed', String(isChart));
+    bTable.setAttribute('aria-pressed', String(!isChart));
+    plot.hidden = !isChart;
+    if (legendBox) legendBox.hidden = !isChart;
+    tableWrap.hidden = isChart;
+    hideTip();
+    if (isChart) draw();
+  };
+  bChart.addEventListener('click', () => setView('chart'));
+  bTable.addEventListener('click', () => setView('table'));
+  head.appendChild(html('div', { class: 'viewtoggle', role: 'group', 'aria-label': `${spec.title} — view as` }, [bChart, bTable]));
+  card.appendChild(head);
+
+  /* A legend is always present for two or more series; a single-series chart
+     gets none — its title already says what is plotted. */
+  let legendBox = null;
+  if (spec.legend && spec.legend.length >= 2) {
+    legendBox = html('div', { class: 'legend' });
+    for (const item of spec.legend) {
+      const key = item.shape === 'line'
+        ? html('span', { class: 'line-key', style: `background:${item.color}` })
+        : item.shape === 'glyph'
+          ? html('span', { class: 'glyph', style: `color:${item.color}`, text: item.glyph })
+          : html('span', { class: 'swatch', style: `background:${item.color}` });
+      legendBox.appendChild(html('span', { class: 'item' }, [key, html('span', { text: item.label })]));
+    }
+    card.appendChild(legendBox);
+  }
+
+  card.appendChild(plot);
+  if (spec.footnote) card.appendChild(html('p', { class: 'fig-foot', text: spec.footnote }));
+
+  /* Table twin */
+  const table = html('table', { class: 'data' });
+  const thead = html('thead');
+  const htr = html('tr');
+  for (const c of spec.table.columns) htr.appendChild(html('th', { class: c.num ? 'num' : '', text: c.label, scope: 'col' }));
+  thead.appendChild(htr);
+  const tbody = html('tbody');
+  for (const row of spec.table.rows) {
+    const tr = html('tr');
+    for (const c of spec.table.columns) tr.appendChild(html('td', { class: c.num ? 'num' : '', text: row[c.key] }));
+    tbody.appendChild(tr);
+  }
+  table.appendChild(thead); table.appendChild(tbody);
+  tableWrap.appendChild(html('caption', { class: 'sr-only', text: spec.title }));
+  tableWrap.appendChild(table);
+  card.appendChild(tableWrap);
+
+  function draw() {
+    if (plot.hidden) return;
+    const w = Math.max(280, plot.clientWidth || card.clientWidth - 40);
+    plot.textContent = '';
+    plot.appendChild(spec.draw(w));
+  }
+  REDRAWS.push(draw);
+  requestAnimationFrame(draw);
+  return card;
+}
+
+/* ---------------------------------------------------------------------------
+   Horizontal bars. One measure per row; nominal categories all take slot 1, so
+   bar length is the only thing carrying the value. `color` may override per row
+   where the row's state (not its rank) is what the colour means.
+   ------------------------------------------------------------------------- */
+/* Note on the options object: never name a destructured option `valueOf`,
+   `toString` or `constructor`. Destructuring reads through the prototype
+   chain, so the default would silently lose to Object.prototype's version. */
+function barsH(w, { rows, band = 30, bar = 16, maxValue = null, display = (r) => fmtInt(r.value), colorOf = () => 'var(--series-1)', threshold = null, thresholdLabel = '', tipTitle = (r) => r.label, tipRows = null, labelMax = 210 }) {
+  const labelW = Math.min(labelMax, Math.max(...rows.map((r) => textWidth(r.label, 11.5, 500))) + 14);
+  const valueW = Math.max(...rows.map((r) => textWidth(display(r), 11.5, 600))) + 14;
+  const x0 = labelW;
+  const plotW = Math.max(40, w - labelW - valueW);
+  const max = maxValue !== null ? maxValue : Math.max(...rows.map((r) => r.value), 1);
+  const h = rows.length * band + 10;
+  const root = svg('svg', { width: w, height: h, viewBox: `0 0 ${w} ${h}`, role: 'group' });
+
+  if (threshold !== null) {
+    const tx = x0 + (threshold / max) * plotW;
+    root.appendChild(svg('line', { x1: tx, y1: 2, x2: tx, y2: rows.length * band + 2, stroke: 'var(--axis)', 'stroke-width': 1 }));
+    root.appendChild(svgText(tx + 5, rows.length * band + 7, thresholdLabel, { size: 10.5, fill: 'var(--text-muted)' }));
+  }
+
+  rows.forEach((r, i) => {
+    const y = i * band;
+    const cy = y + band / 2 - 2;
+    const v = r.value;
+    const bw = Math.max(v > 0 ? 2 : 0, (v / max) * plotW);
+    const g = svg('g', { class: 'band' });
+    g.appendChild(svg('rect', { class: 'hit', x: 0, y, width: w, height: band, fill: 'transparent' }));
+    g.appendChild(svgText(0, cy, r.label, { size: 11.5, weight: 500, fill: 'var(--text-secondary)', tabular: false }));
+    g.appendChild(svg('path', { d: barPath(x0, cy - bar / 2, bw, bar, 4, 'right'), fill: colorOf(r) }));
+    g.appendChild(svgText(x0 + bw + 8, cy, display(r), { size: 11.5, weight: 600, fill: 'var(--text-primary)' }));
+    g.setAttribute('aria-label', `${r.label}: ${display(r)}`);
+    attachHit(g, () => ({ title: tipTitle(r), rows: tipRows ? tipRows(r) : [{ value: display(r), name: r.label, color: colorOf(r) }] }));
+    root.appendChild(g);
+  });
+  return root;
+}
+
+/* ---------------------------------------------------------------------------
+   Columns — stacked or grouped. Touching fills are separated by a 2px gap in
+   the surface colour, never by a stroke.
+   ------------------------------------------------------------------------- */
+function columns(w, { labels, series, mode = 'stacked', height = 190, yFmt = fmtInt, tipTitle = (i) => labels[i], barMax = 24, gap = 2, annotate = null }) {
+  const padL = Math.max(30, Math.max(...niceTicks(Math.max(1, maxOf())).map((t) => textWidth(yFmt(t), 10.5))) + 12);
+  const padR = 6, padT = 14, axisH = 22;
+  const plotW = Math.max(40, w - padL - padR);
+  const plotH = height;
+  const h = plotH + padT + axisH;
+  const root = svg('svg', { width: w, height: h, viewBox: `0 0 ${w} ${h}`, role: 'group' });
+
+  function maxOf() {
+    if (mode === 'stacked') return Math.max(1, ...labels.map((_, i) => sum(series.map((s) => s.values[i]))));
+    return Math.max(1, ...series.flatMap((s) => s.values));
+  }
+  const ticks = niceTicks(maxOf());
+  const top = ticks[ticks.length - 1];
+  const yOf = (v) => padT + plotH - (v / top) * plotH;
+
+  for (const t of ticks) {
+    root.appendChild(svg('line', { x1: padL, y1: yOf(t), x2: w - padR, y2: yOf(t), stroke: t === 0 ? 'var(--axis)' : 'var(--grid)', 'stroke-width': 1 }));
+    root.appendChild(svgText(padL - 8, yOf(t), yFmt(t), { size: 10.5, anchor: 'end' }));
+  }
+
+  const bandW = plotW / labels.length;
+  const barW = Math.min(barMax, mode === 'grouped' ? (bandW * 0.72 - gap) / series.length : bandW * 0.56);
+
+  labels.forEach((lab, i) => {
+    const bx = padL + i * bandW;
+    const g = svg('g', { class: 'band' });
+    g.appendChild(svg('rect', { class: 'hit', x: bx, y: padT, width: bandW, height: plotH + axisH - 6, fill: 'transparent' }));
+
+    if (mode === 'stacked') {
+      const cx = bx + bandW / 2 - barW / 2;
+      let acc = 0;
+      const drawn = series.map((s) => ({ s, v: s.values[i] })).filter((d) => d.v > 0);
+      drawn.forEach((d, k) => {
+        const yTop = yOf(acc + d.v);
+        const yBot = yOf(acc);
+        const isTop = k === drawn.length - 1;
+        const segH = Math.max(1, yBot - yTop - (isTop ? 0 : gap));
+        g.appendChild(svg('path', { d: barPath(cx, yTop, barW, segH, 4, isTop ? 'top' : 'square'), fill: d.s.color() }));
+        acc += d.v;
+      });
+    } else {
+      const groupW = series.length * barW + (series.length - 1) * gap;
+      series.forEach((s, k) => {
+        const v = s.values[i];
+        const x = bx + bandW / 2 - groupW / 2 + k * (barW + gap);
+        const yTop = yOf(v);
+        g.appendChild(svg('path', { d: barPath(x, yTop, barW, Math.max(v > 0 ? 1 : 0, yOf(0) - yTop), 4, 'top'), fill: s.color() }));
+      });
+    }
+
+    root.appendChild(svgText(bx + bandW / 2, padT + plotH + 12, lab, { size: 10.5, anchor: 'middle' }));
+    const rows = series.map((s) => ({ color: s.color(), name: s.label, value: yFmt(s.values[i]) }));
+    g.setAttribute('aria-label', `${tipTitle(i)}: ` + series.map((s) => `${s.label} ${yFmt(s.values[i])}`).join(', '));
+    attachHit(g, () => ({ title: tipTitle(i), rows }));
+    root.appendChild(g);
+  });
+
+  /* Direct labels are used selectively — the one column the reader needs, not
+     a number on every mark. */
+  if (annotate) {
+    const a = annotate(labels, series);
+    if (a && a.index >= 0) {
+      const bx = padL + a.index * bandW + bandW / 2;
+      const yTop = yOf(a.value);
+      const tw = textWidth(a.text, 11, 600);
+      const tx = Math.max(padL + tw / 2, Math.min(w - padR - tw / 2, bx));
+      root.appendChild(svgText(tx, Math.max(padT - 4, yTop - 9), a.text, { size: 11, weight: 600, anchor: 'middle', fill: 'var(--text-primary)' }));
+    }
+  }
+  return root;
+}
+
+/* ---------------------------------------------------------------------------
+   Lines — 2px, round caps, a crosshair that snaps to the nearest x, and one
+   tooltip listing every series at that x.
+   ------------------------------------------------------------------------- */
+function lines(w, { labels, series, height = 190, yFmt = fmtInt, tipTitle = (i) => labels[i], endLabels = true }) {
+  const allVals = series.flatMap((s) => s.values.filter((v) => v !== null));
+  const ticks = niceTicks(Math.max(1, ...allVals));
+  const top = ticks[ticks.length - 1];
+  const padL = Math.max(30, Math.max(...ticks.map((t) => textWidth(yFmt(t), 10.5))) + 12);
+  const endW = endLabels ? Math.max(...series.map((s) => textWidth(yFmt(s.values[s.values.length - 1] ?? 0), 11, 600))) + 12 : 6;
+  const padR = endW, padT = 14, axisH = 22;
+  const plotW = Math.max(40, w - padL - padR);
+  const plotH = height;
+  const h = plotH + padT + axisH;
+  const root = svg('svg', { width: w, height: h, viewBox: `0 0 ${w} ${h}`, role: 'group' });
+  const surface = token('--surface-1');
+
+  const xOf = (i) => padL + (labels.length === 1 ? plotW / 2 : (i / (labels.length - 1)) * plotW);
+  const yOf = (v) => padT + plotH - (v / top) * plotH;
+
+  for (const t of ticks) {
+    root.appendChild(svg('line', { x1: padL, y1: yOf(t), x2: w - padR, y2: yOf(t), stroke: t === 0 ? 'var(--axis)' : 'var(--grid)', 'stroke-width': 1 }));
+    root.appendChild(svgText(padL - 8, yOf(t), yFmt(t), { size: 10.5, anchor: 'end' }));
+  }
+
+  const crosshair = svg('line', { y1: padT, y2: padT + plotH, stroke: 'var(--axis)', 'stroke-width': 1, opacity: 0 });
+  root.appendChild(crosshair);
+
+  for (const s of series) {
+    const pts = s.values.map((v, i) => (v === null ? null : [xOf(i), yOf(v)])).filter(Boolean);
+    if (pts.length > 1) {
+      root.appendChild(svg('path', {
+        d: 'M' + pts.map((p) => `${p[0]},${p[1]}`).join(' L'),
+        fill: 'none', stroke: s.color(), 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round',
+      }));
+    }
+    const last = pts[pts.length - 1];
+    if (last) {
+      root.appendChild(svg('circle', { cx: last[0], cy: last[1], r: 4, fill: s.color(), stroke: surface, 'stroke-width': 2 }));
+    }
+  }
+
+  /* End labels only when the series separate enough at the right edge; when
+     they converge, the legend and the tooltip carry identity instead. */
+  if (endLabels) {
+    const ends = series.map((s) => ({ s, v: s.values[s.values.length - 1] })).filter((e) => e.v !== null && e.v !== undefined);
+    const ys = ends.map((e) => yOf(e.v)).sort((a, b) => a - b);
+    const separated = ys.every((y, i) => i === 0 || y - ys[i - 1] >= 15);
+    if (separated) {
+      for (const e of ends) {
+        root.appendChild(svgText(xOf(labels.length - 1) + 9, yOf(e.v), yFmt(e.v), { size: 11, weight: 600, fill: 'var(--text-primary)' }));
+      }
+    }
+  }
+
+  const dots = svg('g', { opacity: 0 });
+  const dotNodes = series.map((s) => svg('circle', { r: 4, fill: s.color(), stroke: surface, 'stroke-width': 2 }));
+  for (const d of dotNodes) dots.appendChild(d);
+  root.appendChild(dots);
+
+  labels.forEach((lab, i) => {
+    const showEvery = Math.ceil(labels.length / 12);
+    if (i % showEvery === 0) root.appendChild(svgText(xOf(i), padT + plotH + 12, lab, { size: 10.5, anchor: 'middle' }));
+  });
+
+  /* The crosshair finds the X: readers aim at a month, never at a 2px line. */
+  const bandW = plotW / Math.max(1, labels.length - 1);
+  labels.forEach((lab, i) => {
+    const g = svg('g', { class: 'band' });
+    g.appendChild(svg('rect', {
+      class: 'hit', x: xOf(i) - bandW / 2, y: padT, width: bandW, height: plotH + axisH - 6, fill: 'transparent',
+    }));
+    const rows = series.map((s) => ({ color: s.color(), name: s.label, value: s.values[i] === null ? '—' : yFmt(s.values[i]) }));
+    g.setAttribute('aria-label', `${tipTitle(i)}: ` + series.map((s) => `${s.label} ${s.values[i] === null ? 'no data' : yFmt(s.values[i])}`).join(', '));
+    const place = () => {
+      crosshair.setAttribute('x1', xOf(i)); crosshair.setAttribute('x2', xOf(i)); crosshair.setAttribute('opacity', 1);
+      dots.setAttribute('opacity', 1);
+      series.forEach((s, k) => {
+        const v = s.values[i];
+        dotNodes[k].setAttribute('opacity', v === null ? 0 : 1);
+        if (v !== null) { dotNodes[k].setAttribute('cx', xOf(i)); dotNodes[k].setAttribute('cy', yOf(v)); }
+      });
+    };
+    g.addEventListener('pointerenter', place);
+    g.addEventListener('pointermove', place);
+    g.addEventListener('focus', place);
+    g.addEventListener('pointerleave', () => { crosshair.setAttribute('opacity', 0); dots.setAttribute('opacity', 0); });
+    g.addEventListener('blur', () => { crosshair.setAttribute('opacity', 0); dots.setAttribute('opacity', 0); });
+    attachHit(g, () => ({ title: tipTitle(i), rows }));
+    root.appendChild(g);
+  });
+  return root;
+}
+
+/* ---------------------------------------------------------------------------
+   A single horizontal stacked bar — part-to-whole across ordered bands. The
+   ordinal ramp carries the order, so the reader sees severity in the colour.
+   ------------------------------------------------------------------------- */
+function stackedRow(w, { segments, height = 30, gap = 2, totalLabel = '' }) {
+  const total = sum(segments.map((s) => s.value)) || 1;
+  const h = height + 26;
+  const root = svg('svg', { width: w, height: h, viewBox: `0 0 ${w} ${h}`, role: 'group' });
+  let x = 0;
+  segments.forEach((s, i) => {
+    const isLast = i === segments.length - 1;
+    const full = (s.value / total) * w;
+    const segW = Math.max(0, full - (isLast ? 0 : gap));
+    const fill = `var(${s.varName})`;
+    if (s.value > 0) {
+      const g = svg('g', { class: 'band' });
+      g.appendChild(svg('path', { d: barPath(x, 0, Math.max(2, segW), height, 4, isLast ? 'right' : 'square'), fill }));
+      /* Only label inside the segment when the text fits with padding on both
+         sides; otherwise the legend and the table carry it. A label set inside
+         a fill picks ink or white by that fill's luminance, so it always
+         clears contrast in either theme. */
+      const label = fmtInt(s.value);
+      if (textWidth(label, 11, 600) + 16 <= segW) {
+        g.appendChild(svgText(x + segW / 2, height / 2, label, { size: 11, weight: 600, anchor: 'middle', fill: inkOn(s.varName) }));
+      }
+      g.setAttribute('aria-label', `${s.label}: ${fmtInt(s.value)} parts, ${fmtPct(s.value / total)}`);
+      attachHit(g, () => ({ title: s.label, rows: [{ color: fill, name: `parts · ${fmtPct(s.value / total)} of backlog`, value: fmtInt(s.value) }] }));
+      root.appendChild(g);
+    }
+    x += full;
+  });
+  root.appendChild(svgText(0, height + 15, totalLabel, { size: 11, fill: 'var(--text-muted)', tabular: false }));
+  return root;
+}
+
+/* ---------------------------------------------------------------------------
+   Sparkline — de-emphasis hue with the current period in the accent.
+   ------------------------------------------------------------------------- */
+function sparkline(w, values, { height = 34, accent = 'var(--series-1)' } = {}) {
+  const clean = values.map((v) => (v === null || Number.isNaN(v) ? null : v));
+  const nums = clean.filter((v) => v !== null);
+  const lo = Math.min(...nums), hi = Math.max(...nums);
+  const span = hi - lo || 1;
+  const pad = 5;
+  const xOf = (i) => (i / Math.max(1, clean.length - 1)) * (w - 8) + 4;
+  const yOf = (v) => height - pad - ((v - lo) / span) * (height - pad * 2);
+  const root = svg('svg', { width: w, height, viewBox: `0 0 ${w} ${height}`, 'aria-hidden': 'true', focusable: 'false' });
+  const pts = clean.map((v, i) => (v === null ? null : [xOf(i), yOf(v)])).filter(Boolean);
+  if (pts.length > 1) {
+    root.appendChild(svg('path', {
+      d: 'M' + pts.map((p) => `${p[0]},${p[1]}`).join(' L'),
+      fill: 'none', stroke: 'var(--de-emphasis)', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round',
+    }));
+    const tail = pts.slice(-2);
+    root.appendChild(svg('path', {
+      d: `M${tail[0][0]},${tail[0][1]} L${tail[1][0]},${tail[1][1]}`,
+      fill: 'none', stroke: accent, 'stroke-width': 2, 'stroke-linecap': 'round',
+    }));
+    const last = pts[pts.length - 1];
+    root.appendChild(svg('circle', { cx: last[0], cy: last[1], r: 3.5, fill: accent, stroke: token('--surface-1'), 'stroke-width': 2 }));
+  }
+  return root;
+}
+/* ============================================================================
+   VIEW STATE
+   One filter row scopes all three views. Changing a filter re-derives every
+   tile, chart, queue row and table from the same slice, so the numbers on the
+   page always agree with each other.
+   ========================================================================== */
+const STATE = { view: 'posture', program: 'all', site: 'all', regime: 'all', queueExpanded: false };
+const AS_OF = DATA.asOf;
+
+function currentSlice() {
+  const keepAuth = (a) =>
+    (STATE.program === 'all' || a.program === STATE.program) &&
+    (STATE.site === 'all' || a.site === STATE.site) &&
+    (STATE.regime === 'all' || a.regime === STATE.regime);
+  const keepPart = (p) =>
+    (STATE.program === 'all' || p.program === STATE.program) &&
+    (STATE.site === 'all' || p.site === STATE.site) &&
+    /* A part's regime is its determination. Undetermined parts have no regime,
+       so they survive an ITAR/EAR filter only when no regime filter is set —
+       otherwise a filtered coverage figure would quietly hide the backlog. */
+    (STATE.regime === 'all' || p.jurisdiction === STATE.regime);
+  return {
+    authorizations: DATA.authorizations.filter(keepAuth),
+    classifications: DATA.classifications.filter(keepPart),
+  };
+}
+
+/* Resolve a colour token lazily so a theme change redraws against the new
+   value rather than inverting the old one. */
+const c = (name) => () => `var(${name})`;
+function inkOn(varName) {
+  const hex = token(varName);
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return 'var(--text-primary)';
+  const n = parseInt(m[1], 16);
+  const lin = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => {
+    v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2] > 0.42 ? '#0b0b0b' : '#ffffff';
+}
+
+function chip(severity, extra) {
+  const meta = SEVERITY_META[severity];
+  return html('span', { class: `chip ${severity}` }, [
+    html('span', { class: 'dot' }),
+    html('span', { class: 'icon', text: meta.icon }),
+    html('span', { text: extra ? `${meta.label} · ${extra}` : meta.label }),
+  ]);
+}
+
+/* ============================================================================
+   POSTURE
+   ========================================================================== */
+function renderPosture(host, slice) {
+  host.textContent = '';
+  const now = measures(slice, AS_OF);
+  const months = trendMonths(AS_OF);
+  const hist = months.map((m) => measures(slice, m));
+  const monthLabels = months.map(fmtMonYear);
+  const queue = buildQueue(slice, AS_OF);
+
+  /* ---- Hero + severity split ---- */
+  const hero = html('section', { class: 'card hero' });
+  hero.appendChild(html('div', { class: 'hero-figure' }, [
+    html('p', { class: 'label', text: 'Open compliance actions' }),
+    html('p', { class: 'value', text: fmtInt(queue.total) }),
+    html('p', {
+      class: 'foot',
+      text: `${RULES.length} rules evaluated against ${fmtInt(slice.authorizations.length)} authorizations and ${fmtInt(slice.classifications.length)} parts`,
+    }),
+  ]));
+  const split = html('div', { class: 'hero-split' });
+  for (const sv of SEVERITY_ORDER) {
+    split.appendChild(html('div', { class: 'cell' }, [
+      html('p', { class: 'n', text: fmtInt(queue.bySeverity[sv]) }),
+      html('p', { class: 'k' }, [chip(sv)]),
+    ]));
+  }
+  hero.appendChild(split);
+  host.appendChild(hero);
+
+  /* ---- Six KPI tiles, each carrying its own 12-month trend ---- */
+  const tiles = [
+    {
+      label: 'Live authorizations', value: fmtInt(now.liveCount),
+      note: `${fmtUsd(now.authorizedValue)} of authorized value on live authorizations`,
+      series: hist.map((h) => h.liveCount), dir: 'neutral',
+      delta: (a, b) => `${b - a >= 0 ? '+' : '−'}${fmtInt(Math.abs(b - a))}`, fmt: fmtInt,
+    },
+    {
+      label: `Expiring in ${POLICY.EXPIRY_WINDOW_DAYS} days or less`, value: fmtInt(now.expiringCount),
+      note: `${fmtUsd(now.expiringAtRiskValue)} unshipped balance at risk`,
+      series: hist.map((h) => h.expiringCount), dir: 'down',
+      delta: (a, b) => `${b - a >= 0 ? '+' : '−'}${fmtInt(Math.abs(b - a))}`, fmt: fmtInt,
+    },
+    {
+      label: 'Value utilization', value: fmtPct(now.utilization),
+      note: `Amendment threshold at ${fmtPct(POLICY.UTILIZATION_THRESHOLD)} of authorized value`,
+      series: hist.map((h) => h.utilization * 100), dir: 'neutral',
+      delta: (a, b) => `${b - a >= 0 ? '+' : '−'}${Math.abs(b - a).toFixed(1)} pts`, fmt: (v) => `${v.toFixed(0)}%`,
+    },
+    {
+      label: 'Open provisos', value: fmtInt(now.openProvisoCount),
+      note: 'Conditions on live authorizations with no acknowledgement date recorded',
+      series: hist.map((h) => h.openProvisoCount), dir: 'down',
+      delta: (a, b) => `${b - a >= 0 ? '+' : '−'}${fmtInt(Math.abs(b - a))}`, fmt: fmtInt,
+    },
+    {
+      label: 'Classification coverage', value: fmtPct(now.coverage, 1),
+      note: `${fmtInt(now.undeterminedCount)} of ${fmtInt(now.partCount)} parts have no determination of record`,
+      series: hist.map((h) => h.coverage * 100), dir: 'up',
+      delta: (a, b) => `${b - a >= 0 ? '+' : '−'}${Math.abs(b - a).toFixed(1)} pts`, fmt: (v) => `${v.toFixed(1)}%`,
+    },
+    {
+      label: 'Licensing turnaround', value: now.turnaround === null ? '—' : `${fmtInt(now.turnaround)} days`,
+      note: `Median days from submission to issuance, trailing ${POLICY.TURNAROUND_TRAILING_DAYS} days`,
+      series: hist.map((h) => h.turnaround), dir: 'down',
+      delta: (a, b) => `${b - a >= 0 ? '+' : '−'}${fmtInt(Math.abs(b - a))} days`, fmt: (v) => `${fmtInt(v)} days`,
+    },
+  ];
+
+  const kpis = html('div', { class: 'kpis' });
+  for (const t of tiles) {
+    const first = t.series.find((v) => v !== null);
+    const last = t.series[t.series.length - 1];
+    const card = html('section', { class: 'card kpi' });
+    card.appendChild(html('p', { class: 'k', text: t.label }));
+    card.appendChild(html('p', { class: 'v', text: t.value }));
+
+    if (first !== undefined && first !== null && last !== null) {
+      const rising = last > first;
+      const cls = t.dir === 'neutral' || last === first ? '' : (t.dir === 'up') === rising ? 'good' : 'bad';
+      const d = html('p', { class: 'd' }, [
+        html('span', { class: `delta ${cls}`, text: t.delta(first, last) }),
+        html('span', { text: `vs ${monthLabels[0]}` }),
+      ]);
+      card.appendChild(d);
+    }
+
+    const sparkHost = html('div', { class: 'spark' });
+    card.appendChild(sparkHost);
+    card.appendChild(html('p', { class: 'note', text: t.note }));
+    const drawSpark = () => {
+      const w = Math.max(120, sparkHost.clientWidth || 200);
+      sparkHost.textContent = '';
+      sparkHost.appendChild(sparkline(w, t.series));
+      const readable = t.series.map((v, i) => `${monthLabels[i]}: ${v === null ? 'no data' : t.fmt(v)}`).join('; ');
+      sparkHost.setAttribute('aria-label', `${t.label}, 12-month trend — ${readable}`);
+      sparkHost.setAttribute('role', 'img');
+    };
+    REDRAWS.push(drawSpark);
+    requestAnimationFrame(drawSpark);
+    kpis.appendChild(card);
+  }
+  host.appendChild(kpis);
+
+  /* ---- Needs attention ---- */
+  host.appendChild(html('div', { class: 'section-head' }, [
+    html('h2', { text: 'Needs attention' }),
+    html('p', {
+      text: 'Every row is a rule evaluated against the record set, with the reason it matters stated in full. Severity orders the queue; within a severity tier the rule kinds are dealt out round-robin, so a single rule matching many records cannot bury the other nine.',
+    }),
+  ]));
+
+  const queueCard = html('section', { class: 'card queue' });
+  if (!queue.items.length) {
+    queueCard.appendChild(html('p', { class: 'queue-empty', text: 'No rule matched the current selection. Widen the filters to see the full picture.' }));
+  } else {
+    const shown = STATE.queueExpanded ? queue.items : queue.items.slice(0, 14);
+    for (const it of shown) {
+      const row = html('div', { class: 'qrow' });
+      row.appendChild(html('div', {}, [chip(it.severity)]));
+      row.appendChild(html('p', { class: 'qtitle', text: it.title }));
+      row.appendChild(html('p', { class: 'qval' }, [
+        html('span', { text: it.value }),
+        html('br'),
+        html('span', { class: 'muted', style: 'font-weight:400', text: it.valueLabel }),
+      ]));
+      row.appendChild(html('p', { class: 'qwhy', text: it.why }));
+      const meta = html('p', { class: 'qmeta' });
+      for (const m of it.meta) if (m) meta.appendChild(html('span', { text: m }));
+      meta.appendChild(html('span', { class: 'cite', text: it.cite }));
+      row.appendChild(meta);
+      queueCard.appendChild(row);
+    }
+    if (queue.items.length > 14) {
+      queueCard.appendChild(html('div', { class: 'queue-more' }, [
+        html('button', {
+          class: 'btn', type: 'button',
+          text: STATE.queueExpanded ? `Show the first 14 of ${fmtInt(queue.items.length)}` : `Show all ${fmtInt(queue.items.length)} open actions`,
+          onclick: () => { STATE.queueExpanded = !STATE.queueExpanded; render(); },
+        }),
+      ]));
+    }
+  }
+  host.appendChild(queueCard);
+
+  /* ---- Rule coverage ---- */
+  const ruleCard = html('section', { class: 'card', style: 'margin-top:16px' });
+  ruleCard.appendChild(html('h3', { style: 'font-size:13.5px', text: 'Rules evaluated' }));
+  const rt = html('table', { class: 'data', style: 'margin-top:8px' });
+  rt.appendChild(html('thead', {}, [html('tr', {}, [
+    html('th', { text: 'Severity', scope: 'col' }),
+    html('th', { text: 'Rule', scope: 'col' }),
+    html('th', { class: 'num', text: 'Matches', scope: 'col' }),
+  ])]));
+  const rtb = html('tbody');
+  for (const r of RULES) {
+    rtb.appendChild(html('tr', {}, [
+      html('td', {}, [chip(r.severity)]),
+      html('td', { style: 'white-space:normal', text: r.name }),
+      html('td', { class: 'num', text: fmtInt(queue.counts.get(r.key)) }),
+    ]));
+  }
+  rt.appendChild(rtb);
+  ruleCard.appendChild(rt);
+  host.appendChild(ruleCard);
+
+  /* ---- Audit readiness ---- */
+  host.appendChild(html('div', { class: 'section-head' }, [
+    html('h2', { text: 'Audit readiness' }),
+    html('p', {
+      text: 'Whether the supporting paper exists — deliberately independent of whether the underlying decision was right. A determination can be correct and still be unevidenced, and only one of those two problems is visible from here.',
+    }),
+  ]));
+  const meterCard = html('section', { class: 'card' });
+  const meters = html('div', { class: 'meters' });
+  for (const r of auditReadiness(slice, AS_OF)) {
+    const fill = `var(--status-${r.status})`;
+    meters.appendChild(html('div', {
+      class: 'meter',
+      style: `--meter-fill:${fill}; --meter-track:color-mix(in oklab, ${fill} 20%, var(--surface-1));`,
+    }, [
+      html('div', { class: 'top' }, [
+        html('span', { class: 'name', text: r.name }),
+        html('span', { class: 'pct', text: r.of ? fmtPct(r.pct, 1) : '—' }),
+      ]),
+      html('div', {
+        class: 'track', role: 'img',
+        'aria-label': `${r.name}: ${r.of ? fmtPct(r.pct, 1) : 'no records in scope'} — ${fmtInt(r.have)} of ${fmtInt(r.of)} ${r.unit}`,
+      }, [html('div', { class: 'fill', style: `width:${(r.pct * 100).toFixed(1)}%` })]),
+      html('div', { class: 'foot' }, [
+        chip(r.status, `${fmtInt(r.have)} of ${fmtInt(r.of)}`),
+        html('span', { text: r.foot }),
+      ]),
+    ]));
+  }
+  meterCard.appendChild(meters);
+  host.appendChild(meterCard);
+}
+
+/* ============================================================================
+   AUTHORIZATIONS
+   ========================================================================== */
+function renderAuthorizations(host, slice) {
+  host.textContent = '';
+  const live = liveAuths(slice.authorizations, AS_OF);
+
+  host.appendChild(html('div', { class: 'section-head' }, [
+    html('h2', { text: 'Authorizations and agreements' }),
+    html('p', { text: 'What is authorized, what is about to lapse, how much authorized value is left, and how long a decision currently takes.' }),
+  ]));
+
+  const grid = html('div', { class: 'grid-2' });
+
+  /* ---- 1. Expiry pipeline ---- */
+  const pipeMonths = [];
+  for (let i = 1; i <= 12; i++) pipeMonths.push(addMonths(startOfMonth(AS_OF), i));
+  const pipe = pipeMonths.map((m) => {
+    const inMonth = live.filter((a) => sameMonth(a.expiresOn, m));
+    return {
+      label: fmtMonYear(m), axis: fmtAxisMonth(m),
+      itar: inMonth.filter((a) => a.regime === 'ITAR').length,
+      ear: inMonth.filter((a) => a.regime === 'EAR').length,
+      balance: sum(inMonth.map((a) => Math.max(0, a.authorizedValueUsd - shippedValue(a)))),
+    };
+  });
+  const beyond = live.filter((a) => a.expiresOn > endOfMonth(pipeMonths[11])).length;
+  grid.appendChild(figure({
+    title: 'Expiry pipeline — next 12 months',
+    subtitle: 'Live authorizations by the month their term ends.',
+    legend: [
+      { label: 'ITAR', color: 'var(--series-1)', shape: 'rect' },
+      { label: 'EAR', color: 'var(--series-2)', shape: 'rect' },
+    ],
+    footnote: `${fmtInt(beyond)} further live authorizations expire beyond this window. Renewal lead time on an agreement runs to several months, so the first three columns are the ones already in hand.`,
+    draw: (w) => columns(w, {
+      labels: pipe.map((p) => p.axis),
+      series: [
+        { label: 'ITAR', color: c('--series-1'), values: pipe.map((p) => p.itar) },
+        { label: 'EAR', color: c('--series-2'), values: pipe.map((p) => p.ear) },
+      ],
+      mode: 'stacked',
+      tipTitle: (i) => pipe[i].label,
+      annotate: (labels, series) => {
+        const totals = pipe.map((p) => p.itar + p.ear);
+        const idx = totals.indexOf(Math.max(...totals));
+        return { index: idx, value: totals[idx], text: `${totals[idx]} expire` };
+      },
+    }),
+    table: {
+      columns: [
+        { key: 'month', label: 'Month' }, { key: 'itar', label: 'ITAR', num: true },
+        { key: 'ear', label: 'EAR', num: true }, { key: 'total', label: 'Total', num: true },
+        { key: 'balance', label: 'Unshipped balance', num: true },
+      ],
+      rows: pipe.map((p) => ({
+        month: p.label, itar: fmtInt(p.itar), ear: fmtInt(p.ear),
+        total: fmtInt(p.itar + p.ear), balance: fmtUsd(p.balance),
+      })),
+    },
+  }));
+
+  /* ---- 2. Value utilization against the amendment threshold ----
+     Utilization bands are an ordered scale, not a set of names, so they take a
+     one-hue ordinal ramp and the reader sees the order in the colour. The
+     over-threshold band is deliberately NOT painted in a status colour: one
+     colour job per chart, and the severity already has a home in the action
+     queue. The count that matters is direct-labelled instead. */
+  const UTIL_BANDS = [
+    { label: 'Under 25%',    v: '--util-1', lo: 0,    hi: 0.25 },
+    { label: '25–50%',       v: '--util-2', lo: 0.25, hi: 0.50 },
+    { label: '50–75%',       v: '--util-3', lo: 0.50, hi: 0.75 },
+    { label: '75–85%',       v: '--util-4', lo: 0.75, hi: POLICY.UTILIZATION_THRESHOLD },
+    { label: 'Over 85%',     v: '--util-5', lo: POLICY.UTILIZATION_THRESHOLD, hi: Infinity },
+  ];
+  const liveUtil = live.map((a) => ({ a, u: utilization(a, AS_OF) }));
+  const utilBands = UTIL_BANDS.map((b) => {
+    const inBand = liveUtil.filter((x) => x.u >= b.lo && x.u < b.hi);
+    return {
+      label: b.label, value: inBand.length, v: b.v,
+      balance: sum(inBand.map((x) => Math.max(0, x.a.authorizedValueUsd - shippedValue(x.a)))),
+    };
+  });
+  const overCount = utilBands[utilBands.length - 1].value;
+  const overNames = liveUtil.filter((x) => x.u >= POLICY.UTILIZATION_THRESHOLD)
+    .sort((x, y) => y.u - x.u).slice(0, 3).map((x) => x.a.id);
+  grid.appendChild(figure({
+    title: 'Value utilization against the amendment threshold',
+    subtitle: 'Live authorizations by how much of their authorized value has been shipped.',
+    legend: UTIL_BANDS.map((b) => ({ label: b.label, color: `var(${b.v})`, shape: 'rect' })),
+    footnote: `${fmtInt(overCount)} of ${fmtInt(live.length)} live authorizations are past the ${fmtPct(POLICY.UTILIZATION_THRESHOLD)} threshold — highest first, ${overNames.join(', ')}. Sort the detail table below by utilization for the full list; each one is also an action in the queue where it has term remaining.`,
+    draw: (w) => barsH(w, {
+      rows: utilBands, band: 30, bar: 16, labelMax: 110,
+      display: (r) => fmtInt(r.value),
+      colorOf: (r) => `var(${r.v})`,
+      tipTitle: (r) => `${r.label} of authorized value shipped`,
+      tipRows: (r) => [
+        { value: fmtInt(r.value), name: 'live authorizations', color: `var(${r.v})` },
+        { value: fmtUsd(r.balance), name: 'authorized value not yet shipped' },
+      ],
+    }),
+    table: {
+      columns: [
+        { key: 'band', label: 'Utilization band' }, { key: 'n', label: 'Live', num: true },
+        { key: 'share', label: 'Share', num: true }, { key: 'balance', label: 'Unshipped balance', num: true },
+      ],
+      rows: utilBands.map((r) => ({
+        band: r.label, n: fmtInt(r.value),
+        share: fmtPct(r.value / (live.length || 1), 1), balance: fmtUsd(r.balance),
+      })),
+    },
+  }));
+
+  /* ---- 3. Authorized value by destination region ---- */
+  const byRegion = [...groupBy(live, (a) => a.region).entries()]
+    .map(([region, as]) => ({ label: region, value: sum(as.map((a) => a.authorizedValueUsd)), n: as.length, shipped: sum(as.map((a) => shippedValue(a))) }))
+    .sort((a, b) => b.value - a.value);
+  grid.appendChild(figure({
+    title: 'Authorized value by destination region',
+    subtitle: 'Value on the face of live authorizations, by where it may go.',
+    footnote: 'Regions are a reporting roll-up of the destination countries named on each authorization; an authorization naming several countries is counted once, in the region of its primary destination.',
+    draw: (w) => barsH(w, {
+      rows: byRegion, band: 34, bar: 18,
+      display: (r) => fmtUsd(r.value),
+      tipTitle: (r) => r.label,
+      tipRows: (r) => [
+        { value: fmtUsdFull(r.value), name: 'authorized', color: 'var(--series-1)' },
+        { value: fmtUsdFull(r.shipped), name: 'shipped to date' },
+        { value: fmtInt(r.n), name: 'live authorizations' },
+      ],
+    }),
+    table: {
+      columns: [
+        { key: 'region', label: 'Region' }, { key: 'n', label: 'Live', num: true },
+        { key: 'authorized', label: 'Authorized value', num: true }, { key: 'shipped', label: 'Shipped', num: true },
+      ],
+      rows: byRegion.map((r) => ({ region: r.label, n: fmtInt(r.n), authorized: fmtUsdFull(r.value), shipped: fmtUsdFull(r.shipped) })),
+    },
+  }));
+
+  /* ---- 4. Licensing turnaround ---- */
+  const tMonths = trendMonths(AS_OF);
+  const tLabels = tMonths.map(fmtMonYear);
+  const itarT = tMonths.map((m) => turnaroundMedian(slice.authorizations, m, 'ITAR'));
+  const earT = tMonths.map((m) => turnaroundMedian(slice.authorizations, m, 'EAR'));
+  grid.appendChild(figure({
+    title: 'Licensing turnaround — median days to issuance',
+    subtitle: `Median days from submission to issuance, trailing ${POLICY.TURNAROUND_TRAILING_DAYS} days at each month end.`,
+    legend: [
+      { label: 'ITAR', color: 'var(--series-1)', shape: 'line' },
+      { label: 'EAR', color: 'var(--series-2)', shape: 'line' },
+    ],
+    footnote: 'A gap in a line means nothing was issued under that regime in the trailing window. ITAR agreements carry a materially longer decision cycle than hardware licences, which is why the two are never pooled into one figure.',
+    draw: (w) => lines(w, {
+      labels: tMonths.map(fmtAxisMonth),
+      series: [
+        { label: 'ITAR', color: c('--series-1'), values: itarT },
+        { label: 'EAR', color: c('--series-2'), values: earT },
+      ],
+      yFmt: (v) => fmtInt(v),
+      tipTitle: (i) => tLabels[i],
+    }),
+    table: {
+      columns: [{ key: 'month', label: 'Month end' }, { key: 'itar', label: 'ITAR (days)', num: true }, { key: 'ear', label: 'EAR (days)', num: true }],
+      rows: tLabels.map((l, i) => ({
+        month: l, itar: itarT[i] === null ? '—' : fmtInt(itarT[i]), ear: earT[i] === null ? '—' : fmtInt(earT[i]),
+      })),
+    },
+  }));
+
+  host.appendChild(grid);
+
+  /* ---- Detail table ---- */
+  host.appendChild(html('div', { class: 'section-head' }, [
+    html('h2', { text: 'Authorization detail' }),
+    html('p', { text: 'Every authorization in the current selection. Sort by any column; open a row for its provisos, shipment history and named foreign parties.' }),
+  ]));
+
+  const authRows = slice.authorizations.slice().sort((a, b) => (a.expiresOn || a.submittedOn) - (b.expiresOn || b.submittedOn));
+  host.appendChild(sortableTable({
+    rows: authRows,
+    initial: { key: 'util', dir: 'desc' },
+    columns: [
+      { key: 'id', label: 'Authorization', sort: (a) => a.id, cell: (a) => a.id, expandable: true },
+      { key: 'kind', label: 'Type', sort: (a) => a.kind, cell: (a) => a.kind },
+      { key: 'regime', label: 'Regime', sort: (a) => a.regime, cell: (a) => a.regime },
+      { key: 'program', label: 'Program', sort: (a) => a.program, cell: (a) => a.program },
+      { key: 'dest', label: 'Destination', sort: (a) => a.destinations[0], cell: (a) => a.destinations.join(', ') },
+      { key: 'status', label: 'Status', sort: (a) => authStatus(a), cell: (a) => authStatus(a) },
+      { key: 'value', label: 'Authorized', num: true, sort: (a) => a.authorizedValueUsd, cell: (a) => fmtUsd(a.authorizedValueUsd) },
+      { key: 'util', label: 'Utilization', num: true, sort: (a) => utilization(a, AS_OF), cell: (a) => (a.status === 'Issued' ? fmtPct(utilization(a, AS_OF)) : '—') },
+      { key: 'provisos', label: 'Open provisos', num: true, sort: (a) => openProvisos(a, AS_OF).length, cell: (a) => fmtInt(openProvisos(a, AS_OF).length) },
+      { key: 'expires', label: 'Expires', sort: (a) => (a.expiresOn ? a.expiresOn.getTime() : Infinity), cell: (a) => fmtDate(a.expiresOn) },
+    ],
+    detail: (a) => {
+      const box = html('div', { class: 'detailbox' });
+      const facts = html('div', {}, [html('h4', { text: 'Record' })]);
+      const kv = (k, v) => facts.appendChild(html('div', { class: 'kv' }, [html('span', { text: k }), html('span', { text: v })]));
+      kv('Type', a.kindLabel);
+      kv('Submitted', fmtDate(a.submittedOn));
+      kv('Issued', fmtDate(a.issuedOn));
+      kv('Expires', fmtDate(a.expiresOn));
+      kv('Authorized value', fmtUsdFull(a.authorizedValueUsd));
+      kv('Shipped to date', fmtUsdFull(shippedValue(a)));
+      kv('Supporting records', a.recordsOnFile ? 'On file' : 'Not on file');
+      if (a.temporary) kv('Items reconciled', a.itemsReconciledOn ? fmtDate(a.itemsReconciledOn) : 'Not reconciled');
+      kv('Item master keys', a.partNumbers.join(', ') || '—');
+      box.appendChild(facts);
+
+      const pv = html('div', {}, [html('h4', { text: `Provisos (${a.provisos.length})` })]);
+      const pl = html('ul');
+      if (!a.provisos.length) pl.appendChild(html('li', {}, [html('span', { text: 'None recorded.' })]));
+      for (const p of a.provisos) {
+        pl.appendChild(html('li', {}, [
+          html('span', { class: 'ref', text: p.ref }),
+          html('span', {}, [
+            html('span', { text: p.text + ' ' }),
+            html('span', { class: 'muted', text: p.acknowledgedOn ? `Acknowledged ${fmtDate(p.acknowledgedOn)}` : 'Not acknowledged' }),
+          ]),
+        ]));
+      }
+      pv.appendChild(pl);
+      box.appendChild(pv);
+
+      const sh = html('div', {}, [html('h4', { text: `Shipments (${a.shipments.length})` })]);
+      const sl = html('ul');
+      if (!a.shipments.length) sl.appendChild(html('li', {}, [html('span', { text: 'No shipments recorded.' })]));
+      for (const s of a.shipments) {
+        const late = a.expiresOn && s.date > a.expiresOn;
+        sl.appendChild(html('li', {}, [
+          html('span', { class: 'ref', text: fmtDate(s.date) }),
+          html('span', { text: `${fmtUsdFull(s.valueUsd)} · ${s.ref}${late ? ' · after expiry' : ''}` }),
+        ]));
+      }
+      sh.appendChild(sl);
+      const fp = html('div', {}, [html('h4', { text: 'Foreign parties' })]);
+      const fl = html('ul');
+      for (const p of a.foreignParties) {
+        fl.appendChild(html('li', {}, [html('span', { class: 'ref', text: p.role }), html('span', { text: `${p.name} (${p.country})` })]));
+      }
+      fp.appendChild(fl);
+      sh.appendChild(fp);
+      box.appendChild(sh);
+      return box;
+    },
+  }));
+}
+
+function authStatus(a) {
+  if (a.status !== 'Issued') return a.status;
+  if (a.expiresOn <= AS_OF) return 'Expired';
+  if (shippedValue(a) >= a.authorizedValueUsd) return 'Fully consumed';
+  return 'Live';
+}
+
+/* ============================================================================
+   CLASSIFICATION
+   ========================================================================== */
+function renderClassification(host, slice) {
+  host.textContent = '';
+  const parts = slice.classifications;
+  const done = determinedParts(parts, AS_OF);
+  const open = undeterminedParts(parts, AS_OF);
+
+  host.appendChild(html('div', { class: 'section-head' }, [
+    html('h2', { text: 'Jurisdiction and classification' }),
+    html('p', { text: 'What share of the item master has a determination of record, how old the backlog is, and where the control concentration sits.' }),
+  ]));
+
+  const grid = html('div', { class: 'grid-2' });
+
+  /* ---- 1. Backlog aging (ordinal ramp — the order is in the colour) ---- */
+  const bands = [
+    { label: '0–30 days', v: '--ord-1', test: (d) => d <= 30 },
+    { label: '31–60 days', v: '--ord-2', test: (d) => d > 30 && d <= 60 },
+    { label: '61–90 days', v: '--ord-3', test: (d) => d > 60 && d <= 90 },
+    { label: 'Over 90 days', v: '--ord-4', test: (d) => d > 90 },
+  ].map((b) => ({ ...b, count: open.filter((p) => b.test(daysBetween(p.addedOn, AS_OF))).length }));
+  const openTotal = open.length || 1;
+  grid.appendChild(figure({
+    title: 'Backlog aging — parts awaiting a determination',
+    subtitle: 'Days since the part entered the item master without a jurisdiction and classification of record.',
+    legend: bands.map((b) => ({ label: b.label, color: `var(${b.v})`, shape: 'rect' })),
+    footnote: `Anything past ${POLICY.CLASSIFICATION_SLA_DAYS} days breaches the internal service level and raises a serious action. A part with no determination cannot be quoted for export, shipped, or disclosed to a foreign national.`,
+    draw: (w) => stackedRow(w, {
+      segments: bands.map((b) => ({ label: b.label, value: b.count, varName: b.v })),
+      totalLabel: `${fmtInt(open.length)} of ${fmtInt(parts.length)} parts awaiting a determination`,
+    }),
+    table: {
+      columns: [{ key: 'band', label: 'Age band' }, { key: 'n', label: 'Parts', num: true }, { key: 'share', label: 'Share of backlog', num: true }],
+      rows: bands.map((b) => ({ band: b.label, n: fmtInt(b.count), share: fmtPct(b.count / openTotal, 1) })),
+    },
+  }));
+
+  /* ---- 2. Jurisdiction mix ---- */
+  const mix = [
+    { label: 'ITAR — USML', n: done.filter((p) => p.jurisdiction === 'ITAR').length },
+    { label: 'EAR — controlled ECCN', n: done.filter((p) => p.jurisdiction === 'EAR' && p.controlCode !== 'EAR99').length },
+    { label: 'EAR99', n: done.filter((p) => p.controlCode === 'EAR99').length },
+    { label: 'Not subject', n: done.filter((p) => p.jurisdiction === 'Not subject').length },
+    { label: 'No determination', n: open.length },
+  ].sort((a, b) => b.n - a.n).map((r) => ({ label: r.label, value: r.n }));
+  const mixTotal = sum(mix.map((r) => r.value)) || 1;
+  grid.appendChild(figure({
+    title: 'Jurisdiction mix across the item master',
+    subtitle: 'Every part in the current selection, by the determination of record it carries.',
+    footnote: 'Bar length is the only thing carrying the count here — the categories have no natural order, so they all take one colour rather than a value ramp.',
+    draw: (w) => barsH(w, {
+      rows: mix, band: 32, bar: 17, labelMax: 190,
+      display: (r) => fmtInt(r.value),
+      tipTitle: (r) => r.label,
+      tipRows: (r) => [
+        { value: fmtInt(r.value), name: 'parts', color: 'var(--series-1)' },
+        { value: fmtPct(r.value / mixTotal, 1), name: 'of the item master' },
+      ],
+    }),
+    table: {
+      columns: [{ key: 'k', label: 'Determination' }, { key: 'n', label: 'Parts', num: true }, { key: 'share', label: 'Share', num: true }],
+      rows: mix.map((r) => ({ k: r.label, n: fmtInt(r.value), share: fmtPct(r.value / mixTotal, 1) })),
+    },
+  }));
+
+  /* ---- 3. Control concentration ---- */
+  /* EAR99 is excluded: it is the absence of a specific control, so leaving it
+     in makes one catch-all bar dwarf every real control code and hides the
+     concentration the chart exists to show. Its count is on the jurisdiction
+     mix beside this. */
+  const codes = [...groupBy(done.filter((p) => p.controlCode && p.controlCode !== 'EAR99'), (p) => p.controlCode).entries()]
+    .map(([code, ps]) => ({ label: code, value: ps.length, jurisdiction: ps[0].jurisdiction }))
+    .sort((a, b) => b.value - a.value);
+  const topCodes = codes.slice(0, 10);
+  const codedTotal = sum(codes.map((r) => r.value)) || 1;
+  const top3Share = sum(codes.slice(0, 3).map((r) => r.value)) / codedTotal;
+  grid.appendChild(figure({
+    title: 'Control concentration — top control codes',
+    subtitle: 'Specifically controlled parts by the USML category or ECCN recorded on the determination.',
+    footnote: `Ten of ${fmtInt(codes.length)} distinct control codes shown; the top three account for ${fmtPct(top3Share)} of specifically controlled parts. EAR99 is excluded — it records the absence of a specific control, and as the largest single population it would bury every real code. Concentration is what makes a single control-list change expensive.`,
+    draw: (w) => barsH(w, {
+      rows: topCodes, band: 26, bar: 14, labelMax: 110,
+      display: (r) => fmtInt(r.value),
+      tipTitle: (r) => `${r.label} · ${r.jurisdiction}`,
+      tipRows: (r) => [
+        { value: fmtInt(r.value), name: 'parts', color: 'var(--series-1)' },
+        { value: fmtPct(r.value / codedTotal, 1), name: 'of classified parts' },
+      ],
+    }),
+    table: {
+      columns: [{ key: 'code', label: 'Control code' }, { key: 'j', label: 'Jurisdiction' }, { key: 'n', label: 'Parts', num: true }, { key: 'share', label: 'Share', num: true }],
+      rows: codes.map((r) => ({ code: r.label, j: r.jurisdiction, n: fmtInt(r.value), share: fmtPct(r.value / codedTotal, 1) })),
+    },
+  }));
+
+  /* ---- 4. Determination throughput ---- */
+  const tp = trendMonths(AS_OF).map((m) => ({
+    label: fmtMonYear(m), axis: fmtAxisMonth(m),
+    added: parts.filter((p) => sameMonth(p.addedOn, m)).length,
+    completed: parts.filter((p) => p.determinedOn && sameMonth(p.determinedOn, m)).length,
+  }));
+  grid.appendChild(figure({
+    title: 'Determination throughput — added against completed',
+    subtitle: 'Parts entering the item master each month, against determinations recorded that month.',
+    legend: [
+      { label: 'Parts added', color: 'var(--series-1)', shape: 'rect' },
+      { label: 'Determinations completed', color: 'var(--series-2)', shape: 'rect' },
+    ],
+    footnote: 'Months where the first column exceeds the second are the months the backlog grew. The queue only shrinks when completions run ahead of intake for a sustained stretch.',
+    draw: (w) => columns(w, {
+      labels: tp.map((t) => t.axis),
+      series: [
+        { label: 'Parts added', color: c('--series-1'), values: tp.map((t) => t.added) },
+        { label: 'Determinations completed', color: c('--series-2'), values: tp.map((t) => t.completed) },
+      ],
+      mode: 'grouped', barMax: 12,
+      tipTitle: (i) => tp[i].label,
+    }),
+    table: {
+      columns: [{ key: 'month', label: 'Month' }, { key: 'added', label: 'Added', num: true }, { key: 'completed', label: 'Completed', num: true }, { key: 'net', label: 'Net', num: true }],
+      rows: tp.map((t) => ({ month: t.label, added: fmtInt(t.added), completed: fmtInt(t.completed), net: `${t.completed - t.added >= 0 ? '+' : '−'}${Math.abs(t.completed - t.added)}` })),
+    },
+  }));
+
+  host.appendChild(grid);
+
+  /* ---- Part detail ---- */
+  host.appendChild(html('div', { class: 'section-head' }, [
+    html('h2', { text: 'Item master detail' }),
+    html('p', { text: 'Every part in the current selection with its determination of record. Sort by any column.' }),
+  ]));
+
+  host.appendChild(sortableTable({
+    rows: parts.slice(),
+    initial: { key: 'added', dir: 'asc' },
+    columns: [
+      { key: 'part', label: 'Part number', sort: (p) => p.partNumber, cell: (p) => p.partNumber },
+      { key: 'nomen', label: 'Nomenclature', sort: (p) => p.nomenclature, cell: (p) => p.nomenclature },
+      { key: 'program', label: 'Program', sort: (p) => p.program, cell: (p) => p.program },
+      { key: 'jur', label: 'Jurisdiction', sort: (p) => p.jurisdiction || 'zzz', cell: (p) => p.jurisdiction || 'No determination' },
+      { key: 'code', label: 'Control code', sort: (p) => p.controlCode || 'zzz', cell: (p) => p.controlCode || '—' },
+      { key: 'method', label: 'Method', sort: (p) => p.method || 'zzz', cell: (p) => p.method || '—' },
+      { key: 'basis', label: 'Written basis', sort: (p) => (p.determinedOn ? (p.basisOnFile ? 0 : 1) : 2), cell: (p) => (!p.determinedOn ? '—' : p.basisOnFile ? 'On file' : 'Not on file') },
+      { key: 'added', label: 'Added', sort: (p) => p.addedOn.getTime(), cell: (p) => fmtDate(p.addedOn) },
+      { key: 'determined', label: 'Determined', sort: (p) => (p.determinedOn ? p.determinedOn.getTime() : Infinity), cell: (p) => fmtDate(p.determinedOn) },
+      { key: 'review', label: 'Re-review due', sort: (p) => (p.reviewDueOn ? p.reviewDueOn.getTime() : Infinity), cell: (p) => fmtDate(p.reviewDueOn) },
+    ],
+  }));
+}
+
+/* ============================================================================
+   SORTABLE TABLE
+   ========================================================================== */
+function sortableTable({ rows, columns, initial, detail = null }) {
+  const card = html('section', { class: 'card' });
+  const wrap = html('div', { class: 'tablewrap', style: 'max-height:560px; overflow:auto' });
+  const table = html('table', { class: 'data' });
+  const thead = html('thead');
+  const tbody = html('tbody');
+  let sortKey = initial.key, sortDir = initial.dir;
+  const expanded = new Set();
+
+  const htr = html('tr');
+  for (const col of columns) {
+    const th = html('th', { class: col.num ? 'num' : '', scope: 'col' });
+    const btn = html('button', {
+      class: 'sortbtn', type: 'button',
+      onclick: () => {
+        if (sortKey === col.key) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+        else { sortKey = col.key; sortDir = col.num ? 'desc' : 'asc'; }
+        paint();
+      },
+    }, [
+      html('span', { text: col.label }),
+      html('span', { class: 'arrow', text: '▲' }),
+    ]);
+    th.appendChild(btn);
+    col._btn = btn;
+    htr.appendChild(th);
+  }
+  thead.appendChild(htr);
+  table.appendChild(thead);
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+  card.appendChild(wrap);
+  card.appendChild(html('p', { class: 'fig-foot', text: `${fmtInt(rows.length)} records in the current selection.` }));
+
+  function paint() {
+    const col = columns.find((x) => x.key === sortKey) || columns[0];
+    for (const x of columns) {
+      x._btn.setAttribute('aria-sort-active', String(x.key === sortKey));
+      x._btn.querySelector('.arrow').textContent = x.key === sortKey ? (sortDir === 'asc' ? '▲' : '▼') : '';
+      x._btn.closest('th').setAttribute('aria-sort', x.key === sortKey ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none');
+    }
+    const sorted = rows.slice().sort((a, b) => {
+      const va = col.sort(a), vb = col.sort(b);
+      const r = typeof va === 'string' ? va.localeCompare(vb) : va - vb;
+      return sortDir === 'asc' ? r : -r;
+    });
+    tbody.textContent = '';
+    for (const row of sorted) {
+      const tr = html('tr');
+      for (const cl of columns) {
+        const td = html('td', { class: cl.num ? 'num' : '' });
+        if (cl.expandable && detail) {
+          const key = cl.cell(row);
+          td.appendChild(html('button', {
+            class: 'rowtoggle', type: 'button', text: key,
+            'aria-expanded': String(expanded.has(key)),
+            onclick: () => { expanded.has(key) ? expanded.delete(key) : expanded.add(key); paint(); },
+          }));
+        } else td.textContent = cl.cell(row);
+        tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+      const key = columns.find((x) => x.expandable) ? columns.find((x) => x.expandable).cell(row) : null;
+      if (detail && key && expanded.has(key)) {
+        const dtr = html('tr', { class: 'detail' });
+        dtr.appendChild(html('td', { colspan: String(columns.length) }, [detail(row)]));
+        tbody.appendChild(dtr);
+      }
+    }
+  }
+  paint();
+  return card;
+}
+
+/* ============================================================================
+   SHELL — filters, tabs, theme, resize
+   ========================================================================== */
+function fillSelect(sel, values, allLabel) {
+  sel.textContent = '';
+  sel.appendChild(html('option', { value: 'all', text: allLabel }));
+  for (const v of values) sel.appendChild(html('option', { value: v, text: v }));
+}
+
+function render() {
+  REDRAWS.length = 0;
+  hideTip();
+  const slice = currentSlice();
+
+  const filtered = STATE.program !== 'all' || STATE.site !== 'all' || STATE.regime !== 'all';
+  document.getElementById('f-reset').hidden = !filtered;
+  document.getElementById('filter-note').textContent = filtered
+    ? `${fmtInt(slice.authorizations.length)} of ${fmtInt(DATA.authorizations.length)} authorizations · ${fmtInt(slice.classifications.length)} of ${fmtInt(DATA.classifications.length)} parts in scope`
+    : `${fmtInt(DATA.authorizations.length)} authorizations · ${fmtInt(DATA.classifications.length)} parts in scope`;
+
+  const panes = { posture: 'view-posture', auth: 'view-auth', class: 'view-class' };
+  for (const [key, id] of Object.entries(panes)) {
+    const pane = document.getElementById(id);
+    pane.hidden = key !== STATE.view;
+    document.getElementById(`tab-${key}`).setAttribute('aria-selected', String(key === STATE.view));
+  }
+  if (STATE.view === 'posture') renderPosture(document.getElementById('view-posture'), slice);
+  else if (STATE.view === 'auth') renderAuthorizations(document.getElementById('view-auth'), slice);
+  else renderClassification(document.getElementById('view-class'), slice);
+}
+
+function boot() {
+  document.getElementById('asof-chip').textContent = `Extract as of ${fmtDate(AS_OF)}`;
+  document.getElementById('note-scope').textContent =
+    'Two modules are in scope: authorizations and agreements, and jurisdiction and classification. Deliberately out of scope for this proof of concept, and the obvious next modules: restricted party screening, foreign nationals and deemed exports, AES/EEI filing accuracy, voluntary disclosure tracking, and training completion.';
+
+  const programs = [...new Set(DATA.authorizations.map((a) => a.program))].sort();
+  const sites = [...new Set(DATA.authorizations.map((a) => a.site))].sort();
+  fillSelect(document.getElementById('f-program'), programs, 'All programs');
+  fillSelect(document.getElementById('f-site'), sites, 'All sites');
+  fillSelect(document.getElementById('f-regime'), ['ITAR', 'EAR'], 'ITAR and EAR');
+
+  for (const [id, key] of [['f-program', 'program'], ['f-site', 'site'], ['f-regime', 'regime']]) {
+    document.getElementById(id).addEventListener('change', (e) => {
+      STATE[key] = e.target.value;
+      STATE.queueExpanded = false;
+      render();
+    });
+  }
+  document.getElementById('f-reset').addEventListener('click', () => {
+    STATE.program = STATE.site = STATE.regime = 'all';
+    STATE.queueExpanded = false;
+    for (const id of ['f-program', 'f-site', 'f-regime']) document.getElementById(id).value = 'all';
+    render();
+  });
+
+  for (const key of ['posture', 'auth', 'class']) {
+    document.getElementById(`tab-${key}`).addEventListener('click', () => {
+      if (STATE.view === key) return;
+      STATE.view = key;
+      render();
+    });
+  }
+
+  /* The viewer's theme choice wins over the OS setting, in both directions. */
+  const toggle = document.getElementById('theme-toggle');
+  const prefersDark = () => window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const currentDark = () => (document.documentElement.dataset.theme || (prefersDark() ? 'dark' : 'light')) === 'dark';
+  const syncToggle = () => { toggle.textContent = currentDark() ? 'Light theme' : 'Dark theme'; };
+  toggle.addEventListener('click', () => {
+    document.documentElement.dataset.theme = currentDark() ? 'light' : 'dark';
+    syncToggle();
+    for (const fn of REDRAWS.slice()) fn();
+  });
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    syncToggle();
+    for (const fn of REDRAWS.slice()) fn();
+  });
+  syncToggle();
+
+  let t = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(t);
+    t = setTimeout(() => { for (const fn of REDRAWS.slice()) fn(); }, 120);
+  });
+
+  render();
+}
+
+boot();
+
+</script>
+</body>
+</html>
