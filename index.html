@@ -767,7 +767,7 @@ tr.row-focus > td {
   <div class="masthead-inner">
     <div class="masthead-titles">
       <h1>Trade compliance posture</h1>
-      <p class="sub">Export authorizations, classification of record and process compliance &mdash; ITAR (22 CFR 120&ndash;130) and EAR (15 CFR 730&ndash;774)</p>
+      <p class="sub">Authorizations, classification, international pursuits, anti-corruption and process compliance &mdash; ITAR (22 CFR 120&ndash;130), EAR (15 CFR 730&ndash;774) and the FCPA (15 U.S.C. 78dd&ndash;1 <i>et seq.</i>)</p>
     </div>
     <div class="masthead-meta">
       <span class="asof" id="asof-chip"></span>
@@ -792,6 +792,8 @@ tr.row-focus > td {
       <button class="tab" role="tab" id="tab-posture" aria-controls="view-posture" aria-selected="true" type="button">Posture</button>
       <button class="tab" role="tab" id="tab-auth" aria-controls="view-auth" aria-selected="false" type="button">Authorizations</button>
       <button class="tab" role="tab" id="tab-class" aria-controls="view-class" aria-selected="false" type="button">Classification</button>
+      <button class="tab" role="tab" id="tab-pursuits" aria-controls="view-pursuits" aria-selected="false" type="button">Pursuits &amp; programs</button>
+      <button class="tab" role="tab" id="tab-anticorruption" aria-controls="view-anticorruption" aria-selected="false" type="button">Anti-corruption</button>
       <button class="tab" role="tab" id="tab-process" aria-controls="view-process" aria-selected="false" type="button">Process compliance</button>
     </div>
     <div class="filters" id="filters">
@@ -808,6 +810,8 @@ tr.row-focus > td {
   <section id="view-posture" role="tabpanel" aria-labelledby="tab-posture"></section>
   <section id="view-auth" role="tabpanel" aria-labelledby="tab-auth" hidden></section>
   <section id="view-class" role="tabpanel" aria-labelledby="tab-class" hidden></section>
+  <section id="view-pursuits" role="tabpanel" aria-labelledby="tab-pursuits" hidden></section>
+  <section id="view-anticorruption" role="tabpanel" aria-labelledby="tab-anticorruption" hidden></section>
   <section id="view-process" role="tabpanel" aria-labelledby="tab-process" hidden></section>
 
   <div class="notes">
@@ -1129,6 +1133,37 @@ const DATA = (function buildMockData() {
       kinds: ['TAA', 'DSP-5', 'MLA'], regions: ['Europe', 'Indo-Pacific'],
     },
   ];
+
+  /* Country exposure band, 1 (lower) to 3 (higher). SYNTHETIC, and
+     deliberately not a reproduction of any published index.
+     Two deliberate choices here. First, a real deployment binds this to
+     something citable and dated — Transparency International's CPI, the Basel
+     AML Index, an internal country standard — so the band carries a source and
+     a vintage, because a risk rating with no provenance is an opinion wearing
+     a number's clothes. Second, the band is never the whole story on the page:
+     what gets shown and acted on is the ENGAGEMENT risk tier, which combines
+     this with what the third party actually does, how it is paid, and whether
+     it has political exposure. A country is not a risk; an arrangement is.
+     That is both more defensible and more useful — and it keeps the page from
+     printing a bare verdict against the name of a real country. */
+  const COUNTRY_RISK = {
+    'United Kingdom': 1, Germany: 1, France: 1, Norway: 1, Netherlands: 1,
+    Canada: 1, Australia: 1, Japan: 1, 'New Zealand': 1, Singapore: 1,
+    Spain: 2, Italy: 2, Poland: 2, 'Korea, Republic of': 2, Israel: 2, Chile: 2,
+    'United Arab Emirates': 3, Qatar: 3, Kuwait: 3, India: 3, Brazil: 3, Colombia: 3,
+    'Saudi Arabia': 3, Mexico: 3,
+  };
+  const countryBand = (country) => COUNTRY_RISK[country] || 2;
+  /* Engagement risk: the country band, raised by the things that actually
+     drive bribery exposure in a third-party relationship. */
+  const engagementTier = ({ country, pep, commissionRate, role }) => {
+    let t = countryBand(country);
+    if (pep) t += 1;
+    if (commissionRate > 0.09) t += 1;
+    if (role === 'Customs broker' || role === 'Offset partner') t += 1;
+    return Math.max(1, Math.min(4, t));
+  };
+  const RISK_LABEL = { 1: 'Lower', 2: 'Moderate', 3: 'Elevated', 4: 'Higher' };
 
   const REGIONS = [
     { region: 'Europe',        w: 34, countries: ['United Kingdom', 'Germany', 'France', 'Italy', 'Norway', 'Poland', 'Spain', 'Netherlands'] },
@@ -1706,7 +1741,224 @@ const DATA = (function buildMockData() {
   /* Corrective actions on automated controls are added in a second pass, in
      seedCapas below — their measures cannot run until the record set they
      measure is finished, which is here. */
-  return { asOf, authorizations, classifications: parts, controls };
+  /* ---- International pursuits ------------------------------------------
+     A pursuit is an opportunity the company is chasing in a foreign market,
+     and it is the record that makes this a cockpit rather than four modules
+     sharing a stylesheet. Everything else on this page reports what has
+     already happened; a pursuit is the only record that looks forward, and it
+     is where trade compliance either shapes a deal or finds out too late.
+     It deliberately stores almost nothing derived. Whether a pursuit is ready
+     to proceed is COMPUTED from the authorizations that name its program, the
+     classification state of the parts it needs, the intermediaries engaged in
+     its territory, and the country it is going to — because a readiness flag
+     that is stored is a readiness flag that goes stale. */
+  const PURSUIT_STAGES = [
+    { stage: 'Qualifying', w: 22, order: 1 },
+    { stage: 'Capture', w: 26, order: 2 },
+    { stage: 'Proposal', w: 22, order: 3 },
+    { stage: 'Negotiation', w: 16, order: 4 },
+    { stage: 'Awarded', w: 9, order: 5 },
+    { stage: 'Lost', w: 5, order: 6 },
+  ];
+  const SALE_CHANNELS = [
+    { channel: 'Direct commercial sale', w: 62 },
+    { channel: 'Foreign military sale', w: 38 },
+  ];
+  const PURSUIT_SUFFIX = ['Recapitalisation', 'Modernisation', 'Sustainment', 'Fleet upgrade',
+    'Capability insertion', 'Follow-on support', 'Initial fielding', 'Mid-life refresh'];
+
+  const pursuits = [];
+  for (let i = 0; i < 34; i++) {
+    const prog = pick(PROGRAMS);
+    const reg = pick(REGIONS.filter((r) => prog.regions.includes(r.region))) || pick(REGIONS);
+    const country = pick(reg.countries);
+    const st = weighted(PURSUIT_STAGES);
+    const channel = weighted(SALE_CHANNELS).channel;
+    /* An FMS case runs through the U.S. government, so the commercial
+       intermediary question mostly does not arise; a direct commercial sale is
+       where an agent is engaged and where the anti-corruption exposure sits. */
+    const usesIntermediary = channel === 'Direct commercial sale' && chance(0.72);
+    const decisionOn = addDays(asOf, st.stage === 'Awarded' || st.stage === 'Lost'
+      ? -int(20, 400) : int(15, 620));
+    pursuits.push({
+      id: `PUR-${pad(2600 + i * int(2, 11), 5)}`,
+      name: `${country} ${pick(PURSUIT_SUFFIX)}`,
+      program: prog.name, mission: prog.mission || '', site: prog.site,
+      country, region: reg.region, countryBand: countryBand(country),
+      stage: st.stage, stageOrder: st.order, channel,
+      estimatedValueUsd: Math.round(Math.exp(15.4 + gauss() * 1.1) / 100000) * 100000,
+      /* Probability is the capture team's own number. It is carried, never
+         computed here, and it is never multiplied into an expected value on
+         this page — a compliance cockpit has no business forecasting revenue. */
+      pWin: Math.round((0.15 + rnd() * 0.7) * 100) / 100,
+      decisionOn,
+      captureLead: pick(ANALYSTS),
+      owner: programAnalyst.get(prog.name),
+      usesIntermediary,
+      /* What the deal would need if it proceeds. The gap between this and what
+         exists is the whole point of the readiness view. */
+      needsAuthorizationKinds: st.stage === 'Qualifying' ? [] : sample(prog.kinds, int(1, Math.min(2, prog.kinds.length))),
+      requiresTechTransfer: chance(0.42),
+      requiresOffset: reg.region !== 'North America' && chance(0.36),
+      /* Trade compliance is either in the room early or explaining later. */
+      complianceReviewedOn: chance(0.63) ? addDays(asOf, -int(10, 500)) : null,
+    });
+  }
+
+  /* ---- Third-party intermediaries (anti-corruption) --------------------
+     The population an anti-corruption programme actually monitors. Corruption
+     risk under the FCPA and the UK Bribery Act travels through people acting
+     on the company's behalf far more often than through its own employees, so
+     the unit of record is the intermediary and the questions asked of it are:
+     who are they, what are we paying them, where are they operating, when did
+     we last look, and did anyone check them against a list. */
+  const INTERMEDIARY_ROLES = [
+    { role: 'Sales representative', w: 30, commissionBand: [0.02, 0.08] },
+    { role: 'Consultant', w: 20, commissionBand: [0.01, 0.05] },
+    { role: 'Distributor', w: 18, commissionBand: [0.03, 0.12] },
+    { role: 'Freight forwarder', w: 12, commissionBand: [0.005, 0.02] },
+    { role: 'Customs broker', w: 10, commissionBand: [0.005, 0.02] },
+    { role: 'Offset partner', w: 10, commissionBand: [0.02, 0.09] },
+  ];
+  const INTERMEDIARY_STEMS = [
+    'Meridian', 'Calder', 'Northgate', 'Auralis', 'Brixmoor', 'Sable Reach',
+    'Verdant Line', 'Halcyon', 'Ostrava', 'Kestrel Bay', 'Tanager', 'Fenwick',
+    'Solvent Straits', 'Corran', 'Pentland', 'Aldebrook', 'Marisol', 'Vantage Point',
+    'Quorum', 'Larkspur', 'Ironvale', 'Selkirk', 'Brightwater', 'Cordillera',
+  ];
+  const INTERMEDIARY_SUFFIX = ['Trading Co.', 'Partners', 'Advisory', 'Group', 'Logistics', 'International', 'Associates'];
+  const DILIGENCE_LEVELS = ['Standard', 'Enhanced'];
+  const RED_FLAGS = [
+    'Commission materially above the band for this role and territory',
+    'Requested payment to an account in a third country',
+    'Introduced by the end customer rather than sourced independently',
+    'Declined to provide beneficial ownership detail',
+    'Close family relationship to an official disclosed after engagement',
+    'Invoice narrative does not describe an identifiable service',
+    'Requested an unusual advance against a milestone not yet met',
+  ];
+
+  const REFRESH_YEARS = { 1: 3, 2: 3, 3: 2, 4: 1 };
+  const SCREEN_CYCLE_DAYS = 365;
+  const weightedProgram = () => pick(PROGRAMS);
+  const intermediaries = [];
+  const usedNames = new Set();
+  for (let i = 0; i < 74; i++) {
+    const role = weighted(INTERMEDIARY_ROLES);
+    /* Third parties are engaged to chase business, so a good share of them are
+       homed against a live direct-commercial-sale pursuit rather than scattered
+       independently. Generated independently, an exact program-and-country
+       match against a pursuit almost never occurred, and every such pursuit
+       reported "no third party of record" — a blocker manufactured by the
+       generation order rather than by the facts. */
+    const dcs = pursuits.filter((x) => x.usesIntermediary);
+    const target = dcs.length && chance(0.62) ? pick(dcs) : null;
+    const prog = target ? PROGRAMS.find((x) => x.name === target.program) : weightedProgram();
+    /* Sample across every region the program actually operates in, not the
+       first one that matches — taking the first collapsed three quarters of
+       the population into Europe and left the elevated-risk territories, which
+       are the ones this module exists for, with almost nobody in them. */
+    const reg = target ? REGIONS.find((r) => r.region === target.region)
+      : (pick(REGIONS.filter((r) => prog.regions.includes(r.region))) || pick(REGIONS));
+    const country = target ? target.country : pick(reg.countries);
+    let name;
+    do {
+      name = `${pick(INTERMEDIARY_STEMS)} ${pick(INTERMEDIARY_SUFFIX)}`;
+    } while (usedNames.has(name));
+    usedNames.add(name);
+
+    const pepExposure = chance(countryBand(country) >= 2 ? 0.2 : 0.06);
+    const engagedOn = addDays(asOf, -int(120, 2600));
+    /* Higher-risk territories get a shorter refresh cycle. That is the whole
+       point of a risk tier — it has to change what the programme DOES, or it
+       is decoration. */
+    const band = role.commissionBand;
+    const commissionRate = Math.round((band[0] + rnd() * (band[1] - band[0])
+      + (chance(0.06) ? 0.04 + rnd() * 0.05 : 0)) * 10000) / 10000;
+    const tier = engagementTier({ country, pep: pepExposure, commissionRate, role: role.role });
+    const refreshYears = REFRESH_YEARS[tier];
+    /* Most third parties are inside their cycle and a minority are not. Drawing
+       the lag uniformly across the cycle plus a long tail put half the
+       population overdue, which makes "overdue" stop discriminating — the same
+       trap the proviso decay exists to avoid. */
+    const lastDiligenceOn = chance(0.05) ? null
+      : addDays(asOf, -(chance(0.17)
+        ? int(refreshYears * 365 + 10, refreshYears * 365 + 400)
+        : int(20, Math.max(40, refreshYears * 365 - 40))));
+    const flags = [];
+    /* Red flags concentrate where the risk is, rather than scattering evenly. */
+    const flagChance = tier >= 3 ? 0.11 : 0.035;
+    if (chance(flagChance)) flags.push(pick(RED_FLAGS));
+    if (chance(flagChance / 3)) {
+      const second = pick(RED_FLAGS);
+      if (!flags.includes(second)) flags.push(second);
+    }
+
+    intermediaries.push({
+      id: `TP-${pad(4100 + i * int(3, 17), 5)}`,
+      name, role: role.role, country, region: reg.region,
+      /* Both are kept, and they answer different questions. countryBand is
+         where the work happens; engagementTier is how exposed this particular
+         arrangement is, and it is the one the rules and the page act on. */
+      countryBand: countryBand(country), engagementTier: tier,
+      program: prog.name, site: prog.site,
+      owner: programAnalyst.get(prog.name),
+      engagedOn,
+      /* A contract term that simply ran from the engagement date left 43 of 74
+         relationships nominally expired, which pushed most of the population
+         out of scope and made the module look empty. Live relationships are
+         renewed; a minority are left lapsed on purpose, because a third party
+         still being paid under an expired contract is a real finding. */
+      contractEndsOn: chance(0.14)
+        ? addDays(asOf, -int(10, 400))
+        : addDays(asOf, int(60, 4 * 365)),
+      commissionRate,
+      paidYtdUsd: Math.round(Math.exp(10.4 + gauss() * 1.15) / 100) * 100,
+      diligenceLevel: tier >= 3 || commissionRate > 0.09 ? 'Enhanced' : pick(DILIGENCE_LEVELS),
+      lastDiligenceOn,
+      refreshDueOn: lastDiligenceOn ? addDays(lastDiligenceOn, refreshYears * 365) : null,
+      /* Restricted-party screening is a different question from diligence:
+         diligence asks who they are, screening asks whether a government has
+         already said no. Both have their own clock. */
+      /* Most parties are screened inside the cycle; a minority have lapsed and
+         a few were never screened at all. Drawing uniformly across a window
+         wider than the cycle put a quarter of the population out of date,
+         which drowns the parties that genuinely need chasing. */
+      lastScreenedOn: chance(0.05) ? null
+        : addDays(asOf, -(chance(0.14) ? int(SCREEN_CYCLE_DAYS + 10, SCREEN_CYCLE_DAYS + 320) : int(1, SCREEN_CYCLE_DAYS - 20))),
+      screenHit: chance(0.04),
+      pepExposure,
+      trainingCurrent: chance(0.94),
+      certificationOnFile: chance(0.95),
+      redFlags: flags,
+    });
+  }
+
+  /* ---- Gifts, hospitality and contributions ---------------------------
+     The small-value stream. It matters because the pattern is the finding,
+     not any single entry: one dinner is hospitality, forty dinners for the
+     same official across a bid cycle is something else. */
+  const GH_KINDS = ['Hospitality', 'Gift', 'Travel', 'Charitable contribution', 'Sponsorship'];
+  const giftsLog = [];
+  for (let i = 0; i < 120; i++) {
+    const prog = pick(PROGRAMS);
+    const reg = pick(REGIONS.filter((r) => prog.regions.includes(r.region))) || pick(REGIONS);
+    const country = pick(reg.countries);
+    const kind = pick(GH_KINDS);
+    const base = kind === 'Travel' ? 2200 : kind === 'Charitable contribution' ? 9000 : kind === 'Sponsorship' ? 14000 : 260;
+    giftsLog.push({
+      id: `GH-${pad(9000 + i * int(2, 9), 5)}`,
+      kind, country, countryBand: countryBand(country), program: prog.name, site: prog.site,
+      recipientIsOfficial: chance(0.34),
+      valueUsd: Math.max(40, Math.round(base * (0.4 + rnd() * 2.4))),
+      occurredOn: addDays(asOf, -int(1, 365)),
+      /* Pre-approval is the control. Recording it afterwards is the finding. */
+      preApproved: chance(0.82),
+      owner: programAnalyst.get(prog.name),
+    });
+  }
+
+  return { asOf, authorizations, classifications: parts, controls, intermediaries, giftsLog, pursuits };
 })();
 
 /* ===== END MOCK DATA LAYER ================================================ */
@@ -1883,6 +2135,593 @@ function trendMonths(at) {
     out.push(i === 0 ? at : endOfMonth(m));
   }
   return out;
+}
+
+/* ============================================================================
+   GLOBAL ANTI-CORRUPTION MONITORING
+   The unit of record is the third party, because that is where the exposure
+   sits: under the FCPA and the UK Bribery Act a company answers for people
+   acting on its behalf far more often than for its own employees. Everything
+   here asks five questions of each relationship — who are they, what are we
+   paying them, where are they working, when did we last look, and did anyone
+   check them against a list.
+   ========================================================================== */
+function renderAntiCorruption(host, slice) {
+  host.textContent = '';
+  const at = AS_OF;
+  const m = antiCorruptionMeasures(slice, at);
+  const active = activeIntermediaries(slice.intermediaries, at);
+  const gifts = (slice.giftsLog || []).filter((g) => g.occurredOn <= at && daysBetween(g.occurredOn, at) <= 365);
+
+  host.appendChild(html('div', { class: 'section-head' }, [
+    html('p', { class: 'eyebrow', text: 'Module five' }),
+    html('h2', { text: 'Global anti-corruption monitoring' }),
+    html('p', {
+      text: 'Third parties acting for the company abroad, what they are paid, and whether anybody has looked at them lately. Risk here is a property of the arrangement rather than of the country: the exposure band of the territory is one input, and what the party does, how it is paid and whether it has political exposure are the others. The bands shown are illustrative placeholders — a real deployment binds them to a published index with a source and a vintage, and nothing on this page is a rating of any real country.',
+    }),
+  ]));
+
+  if (!active.length) {
+    host.appendChild(html('section', { class: 'card' }, [
+      html('p', { class: 'queue-empty', text: 'No engaged third parties in the current selection.' }),
+    ]));
+    return;
+  }
+
+  const kpis = html('div', { class: 'kpis kpis-4' });
+  const tile = (label, value, note) => {
+    const card = html('section', { class: 'card kpi' });
+    card.appendChild(html('p', { class: 'k', text: label }));
+    card.appendChild(html('p', { class: 'v', text: value }));
+    card.appendChild(html('p', { class: 'note', text: note }));
+    return card;
+  };
+  kpis.appendChild(tile('Third parties engaged', fmtInt(m.activeCount),
+    `${fmtInt(m.higherRiskCount)} at elevated or higher engagement risk · ${fmtUsdFull(m.commissionExposureUsd)} paid year to date`));
+  kpis.appendChild(tile('Material items outstanding', fmtInt(m.materialCount),
+    m.materialCount === 0 ? `Every engaged party is current · ${fmtInt(m.housekeepingOnlyCount)} with housekeeping only`
+      : `${fmtInt(m.diligenceOverdueCount)} diligence overdue · ${fmtInt(m.screenStaleCount)} screening stale · ${fmtInt(m.redFlagCount)} carrying a red flag · a further ${fmtInt(m.housekeepingOnlyCount)} have housekeeping only`));
+  kpis.appendChild(tile('Unresolved screening matches', fmtInt(m.screenHitCount),
+    m.screenHitCount === 0 ? 'No open matches against restricted-party lists'
+      : 'Payments and shipments to these parties should hold until resolved'));
+  kpis.appendChild(tile('Gifts without pre-approval', fmtInt(m.giftsUnapproved),
+    `${fmtInt(m.giftsCount)} entries in the last 12 months · ${fmtInt(m.giftsToOfficials)} recorded against officials`));
+  host.appendChild(kpis);
+
+  const grid = html('div', { class: 'grid-2' });
+
+  /* ---- The population, by engagement risk and standing ---- */
+  const TIERS = [4, 3, 2, 1];
+  const tierRows = TIERS.map((t) => {
+    const inTier = active.filter((x) => x.engagementTier === t);
+    return {
+      tier: t, label: RISK_LABEL_UI[t], n: inTier.length,
+      issues: inTier.filter((x) => materialIssues(x, at).length > 0).length,
+    };
+  }).filter((r) => r.n > 0);
+  grid.appendChild(figure({
+    title: 'Third parties by engagement risk',
+    subtitle: 'How many relationships sit at each risk tier, and how many of those are not currently in good standing.',
+    legend: [
+      { label: 'No material item', color: 'var(--asr-1)', shape: 'rect' },
+      { label: 'Material item outstanding', color: 'var(--asr-3)', shape: 'rect' },
+    ],
+    footnote: 'Engagement risk combines the country exposure band with what the party does, whether its commission sits above the written-justification band, and whether it carries political exposure. A country is not a risk; an arrangement is — and the tier is what sets the diligence refresh cycle, so it has to change what the programme does rather than just how the chart looks.',
+    draw: (w) => columns(w, {
+      labels: tierRows.map((r) => r.label),
+      series: [
+        { label: 'No material item', color: c('--asr-1'), values: tierRows.map((r) => r.n - r.issues) },
+        { label: 'Material item outstanding', color: c('--asr-3'), values: tierRows.map((r) => r.issues) },
+      ],
+      stacked: true,
+      yFmt: fmtInt,
+    }),
+    table: {
+      columns: [
+        { key: 'tier', label: 'Engagement risk' }, { key: 'n', label: 'Third parties', num: true },
+        { key: 'ok', label: 'No material item', num: true }, { key: 'issues', label: 'Material outstanding', num: true },
+      ],
+      rows: tierRows.map((r) => ({
+        tier: r.label, n: fmtInt(r.n), ok: fmtInt(r.n - r.issues), issues: fmtInt(r.issues),
+      })),
+    },
+  }));
+
+  /* ---- What is outstanding, by kind ---- */
+  const ISSUE_KINDS = [
+    { key: 'screen-hit', label: 'Unresolved screening match' },
+    { key: 'red-flag', label: 'Red flag recorded' },
+    { key: 'diligence', label: 'Diligence refresh overdue' },
+    { key: 'screen-stale', label: 'Screening past its cycle' },
+    { key: 'commission', label: 'Commission above the band' },
+    { key: 'certification', label: 'No signed certification' },
+    { key: 'training', label: 'Training not current' },
+  ];
+  const issueRows = ISSUE_KINDS.map((k) => ({
+    label: k.label,
+    value: active.filter((t) => intermediaryIssues(t, at).some((i) => i.key === k.key)).length,
+  })).filter((r) => r.value > 0).sort((a, b) => b.value - a.value);
+  grid.appendChild(figure({
+    title: 'What is outstanding',
+    subtitle: 'Every reason an engaged third party is not currently in good standing, counted separately.',
+    footnote: 'Deliberately not rolled into one score. A composite would be easier to draw and impossible to act on, because the remediation for a stale screen is not the remediation for a red flag — and a party can carry several of these at once, so the counts here do not sum to the population.',
+    draw: (w) => barsH(w, {
+      rows: issueRows, band: 30, bar: 16, labelMax: 210,
+      display: (r) => fmtInt(r.value),
+      tipTitle: (r) => r.label,
+      tipRows: (r) => [{ value: fmtInt(r.value), name: 'third parties', color: 'var(--magnitude)' }],
+    }),
+    table: {
+      columns: [{ key: 'k', label: 'Outstanding item' }, { key: 'n', label: 'Third parties', num: true }],
+      rows: issueRows.map((r) => ({ k: r.label, n: fmtInt(r.value) })),
+    },
+  }));
+  host.appendChild(grid);
+
+  /* ---- Gifts, hospitality and contributions ---- */
+  const GH_BANDS = [
+    { label: 'Under $250', lo: 0, hi: GIFT_PREAPPROVAL_USD },
+    { label: '$250–$1k', lo: GIFT_PREAPPROVAL_USD, hi: 1000 },
+    { label: '$1k–$5k', lo: 1000, hi: 5000 },
+    { label: '$5k and over', lo: 5000, hi: Infinity },
+  ];
+  const ghRows = GH_BANDS.map((b, i) => {
+    const inBand = gifts.filter((g) => g.valueUsd >= b.lo && g.valueUsd < b.hi);
+    return {
+      label: b.label, value: inBand.length, varName: `--util-${i + 2}`,
+      officials: inBand.filter((g) => g.recipientIsOfficial).length,
+      unapproved: inBand.filter((g) => !g.preApproved).length,
+    };
+  });
+  const grid2 = html('div', { class: 'grid-2' });
+  grid2.appendChild(figure({
+    title: 'Gifts, hospitality and contributions by value',
+    subtitle: 'The last twelve months, banded by value. Pre-approval is required above $250.',
+    footnote: 'The pattern is the finding here, not any single entry: one dinner is hospitality, and forty dinners for the same official across a bid cycle is something a regulator will ask about. Value bands are an ordered scale, so they take a one-hue ordinal ramp.',
+    draw: (w) => barsH(w, {
+      rows: ghRows, band: 30, bar: 16, labelMax: 130,
+      colorOf: (r) => `var(${r.varName})`,
+      display: (r) => fmtInt(r.value),
+      tipTitle: (r) => r.label,
+      tipRows: (r) => [
+        { value: fmtInt(r.value), name: 'entries', color: `var(${r.varName})` },
+        { value: fmtInt(r.officials), name: 'to a government official' },
+        { value: fmtInt(r.unapproved), name: 'without pre-approval' },
+      ],
+    }),
+    table: {
+      columns: [
+        { key: 'band', label: 'Value band' }, { key: 'n', label: 'Entries', num: true },
+        { key: 'off', label: 'To officials', num: true }, { key: 'un', label: 'No pre-approval', num: true },
+      ],
+      rows: ghRows.map((r) => ({
+        band: r.label, n: fmtInt(r.value), off: fmtInt(r.officials), un: fmtInt(r.unapproved),
+      })),
+    },
+  }));
+
+  /* ---- Where the spend sits ---- */
+  const byCountry = [...groupBy(active, (t) => t.country).entries()]
+    .map(([country, ts]) => ({
+      label: country, value: sum(ts.map((t) => t.paidYtdUsd)), n: ts.length,
+      band: ts[0].countryBand,
+      issues: ts.filter((t) => intermediaryIssues(t, at).length > 0).length,
+    }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 10);
+  grid2.appendChild(figure({
+    title: 'Third-party spend by territory',
+    subtitle: 'Paid year to date, by where the party operates. Top ten.',
+    footnote: 'Spend is the exposure that matters most in an enforcement review, because it is what the books and records provisions attach to. The exposure band beside each territory is an illustrative placeholder and not a rating of any real country.',
+    draw: (w) => barsH(w, {
+      rows: byCountry, band: 30, bar: 16, labelMax: 150,
+      display: (r) => fmtUsd(r.value),
+      tipTitle: (r) => r.label,
+      tipRows: (r) => [
+        { value: fmtUsdFull(r.value), name: 'paid year to date', color: 'var(--magnitude)' },
+        { value: fmtInt(r.n), name: r.n === 1 ? 'third party' : 'third parties' },
+        { value: fmtInt(r.issues), name: 'with something outstanding' },
+        { value: RISK_LABEL_UI[r.band], name: 'country exposure band' },
+      ],
+    }),
+    table: {
+      columns: [
+        { key: 'country', label: 'Territory' }, { key: 'n', label: 'Parties', num: true },
+        { key: 'issues', label: 'Outstanding', num: true }, { key: 'band', label: 'Exposure band' },
+        { key: 'paid', label: 'Paid YTD', num: true },
+      ],
+      rows: byCountry.map((r) => ({
+        country: r.label, n: fmtInt(r.n), issues: fmtInt(r.issues),
+        band: RISK_LABEL_UI[r.band], paid: fmtUsd(r.value),
+      })),
+    },
+  }));
+  host.appendChild(grid2);
+
+  /* ---- The register ---- */
+  host.appendChild(html('div', { class: 'section-head' }, [
+    html('p', { class: 'eyebrow', text: 'Records' }),
+    html('h2', { text: 'Third-party register' }),
+    html('p', { text: 'Every engaged intermediary, with its diligence and screening record. Open a row for what is outstanding against it, the pursuits it is working, and the red flags recorded in its file.' }),
+  ]));
+
+  const rows = active.slice().sort((a, b) => {
+    const ia = materialIssues(a, at).length, ib = materialIssues(b, at).length;
+    return ib - ia || b.engagementTier - a.engagementTier || b.paidYtdUsd - a.paidYtdUsd;
+  });
+  host.appendChild(sortableTable({
+    rows, caption: 'Third-party register',
+    focusKey: STATE.view === 'anticorruption' ? STATE.focus : null,
+    initial: { key: 'standing', dir: 'desc' },
+    columns: [
+      { key: 'id', label: 'Party', sort: (t) => t.id, cell: (t) => t.id, expandable: true },
+      { key: 'name', label: 'Name', sort: (t) => t.name, cell: (t) => t.name, wrap: true },
+      { key: 'role', label: 'Role', sort: (t) => t.role, cell: (t) => t.role },
+      { key: 'country', label: 'Territory', sort: (t) => t.country, cell: (t) => t.country },
+      { key: 'program', label: 'Program', sort: (t) => t.program, cell: (t) => t.program },
+      { key: 'tier', label: 'Engagement risk', sort: (t) => t.engagementTier, cell: (t) => RISK_LABEL_UI[t.engagementTier] },
+      { key: 'commission', label: 'Commission', num: true, sort: (t) => t.commissionRate, cell: (t) => fmtPct(t.commissionRate, 1) },
+      { key: 'paid', label: 'Paid YTD', num: true, sort: (t) => t.paidYtdUsd, cell: (t) => fmtUsd(t.paidYtdUsd) },
+      { key: 'diligence', label: 'Diligence', sort: (t) => (t.lastDiligenceOn ? t.lastDiligenceOn.getTime() : 0), cell: (t) => (t.lastDiligenceOn ? fmtDate(t.lastDiligenceOn) : 'None') },
+      { key: 'standing', label: 'Material', num: true, sort: (t) => materialIssues(t, at).length, cell: (t) => fmtInt(materialIssues(t, at).length) },
+      { key: 'house', label: 'Housekeeping', num: true, sort: (t) => intermediaryIssues(t, at).length - materialIssues(t, at).length, cell: (t) => fmtInt(intermediaryIssues(t, at).length - materialIssues(t, at).length) },
+    ],
+    detail: (t) => {
+      const box = html('div', { class: 'detailbox' });
+      const facts = html('div', {}, [html('h4', { text: 'Relationship' })]);
+      const kv = (k, v) => facts.appendChild(html('div', { class: 'kv' }, [html('span', { text: k }), html('span', { text: v })]));
+      kv('Role', t.role);
+      kv('Territory', `${t.country} (${t.region})`);
+      kv('Country exposure band', RISK_LABEL_UI[t.countryBand]);
+      kv('Engagement risk', RISK_LABEL_UI[t.engagementTier]);
+      kv('Program', t.program);
+      kv('Engaged', fmtDate(t.engagedOn));
+      kv('Contract ends', fmtDate(t.contractEndsOn));
+      kv('Commission', fmtPct(t.commissionRate, 2));
+      kv('Paid year to date', fmtUsdFull(t.paidYtdUsd));
+      kv('Politically exposed', t.pepExposure ? 'Yes' : 'No');
+      kv('Diligence level', t.diligenceLevel);
+      kv('Last diligence', t.lastDiligenceOn ? fmtDate(t.lastDiligenceOn) : 'None of record');
+      kv('Refresh due', t.refreshDueOn ? fmtDate(t.refreshDueOn) : '—');
+      kv('Last screened', t.lastScreenedOn ? fmtDate(t.lastScreenedOn) : 'Never');
+      kv('Certification on file', t.certificationOnFile ? 'Yes' : 'No');
+      kv('Training current', t.trainingCurrent ? 'Yes' : 'No');
+      box.appendChild(facts);
+
+      const issues = intermediaryIssues(t, at);
+      const ib = html('div', {}, [html('h4', { text: `Outstanding (${issues.length})` })]);
+      const il = html('ul');
+      if (!issues.length) il.appendChild(html('li', {}, [html('span', { text: 'Nothing outstanding. Diligence and screening are both current.' })]));
+      for (const i of issues) {
+        il.appendChild(html('li', {}, [
+          html('span', {
+            class: 'ref',
+            text: !i.material ? SEVERITY_META.watch.icon
+              : (i.key === 'screen-hit' || i.key === 'red-flag') ? SEVERITY_META.critical.icon
+                : SEVERITY_META.serious.icon,
+          }),
+          html('span', { text: i.text }),
+        ]));
+      }
+      ib.appendChild(il);
+      box.appendChild(ib);
+
+      /* The cross-link back the other way: which live pursuits depend on this
+         relationship. A third party out of standing matters more when a bid is
+         riding on it, and that is not visible from the party's own record. */
+      const onPursuits = (slice.pursuits || []).filter((p) => isLivePursuit(p)
+        && p.program === t.program && p.country === t.country);
+      const pb = html('div', {}, [html('h4', { text: `Live pursuits in ${t.country}` })]);
+      const pl = html('ul');
+      if (!onPursuits.length) pl.appendChild(html('li', {}, [html('span', { text: 'No live pursuit depends on this relationship.' })]));
+      for (const p of onPursuits) {
+        pl.appendChild(html('li', {}, [
+          html('span', { class: 'ref', text: p.stage }),
+          html('span', {}, [
+            html('button', {
+              class: 'drill', type: 'button', text: p.id,
+              'data-fk': `tp-pursuit:${t.id}:${p.id}`,
+              title: `Open ${p.id} in the pursuit register`,
+              onclick: () => { STATE.view = 'pursuits'; STATE.focus = p.id; render(); },
+            }),
+            html('span', { class: 'muted', text: ` ${p.name} · ${fmtUsd(p.estimatedValueUsd)}` }),
+          ]),
+        ]));
+      }
+      pb.appendChild(pl);
+      box.appendChild(pb);
+      return box;
+    },
+  }));
+}
+
+/* ============================================================================
+   INTERNATIONAL PURSUITS AND PROGRAMS
+   The only forward-looking record on the page. Everything else reports what
+   already happened; a pursuit is where trade compliance can still change an
+   outcome instead of describing one, which is why its readiness is computed
+   from the other three modules rather than stored on the record.
+   ========================================================================== */
+const READINESS_META = {
+  ready:   { label: 'Ready',   severity: 'good' },
+  watch:   { label: 'Watch',   severity: 'warning' },
+  blocked: { label: 'Blocked', severity: 'critical' },
+};
+
+function renderPursuits(host, slice) {
+  host.textContent = '';
+  const at = AS_OF;
+  const all = slice.pursuits || [];
+  const live = all.filter(isLivePursuit);
+  const readiness = new Map(all.map((p) => [p.id, pursuitReadiness(p, slice, at)]));
+
+  host.appendChild(html('div', { class: 'section-head' }, [
+    html('p', { class: 'eyebrow', text: 'Module four' }),
+    html('h2', { text: 'International pursuits and programs' }),
+    html('p', {
+      text: 'What the company is chasing abroad, and whether it could lawfully deliver it today. Readiness is not stored on the pursuit — it is recomputed from the authorizations that name the program, the classification state of the parts on those authorizations, the third parties engaged in the territory, and the destination itself. A stored readiness flag goes stale the moment any of those four move, which is precisely when somebody would rely on it.',
+    }),
+  ]));
+
+  if (!all.length) {
+    host.appendChild(html('section', { class: 'card' }, [
+      html('p', { class: 'queue-empty', text: 'No pursuits in the current selection.' }),
+    ]));
+    return;
+  }
+
+  const counts = { ready: 0, watch: 0, blocked: 0 };
+  for (const p of live) counts[readiness.get(p.id).status] += 1;
+  const blockedValue = sum(live.filter((p) => readiness.get(p.id).status === 'blocked').map((p) => p.estimatedValueUsd));
+  const decidingSoon = live.filter((p) => daysBetween(at, p.decisionOn) <= 90 && p.decisionOn > at);
+  const blockedSoon = decidingSoon.filter((p) => readiness.get(p.id).status === 'blocked');
+
+  const kpis = html('div', { class: 'kpis kpis-4' });
+  const tile = (label, value, note) => {
+    const card = html('section', { class: 'card kpi' });
+    card.appendChild(html('p', { class: 'k', text: label }));
+    card.appendChild(html('p', { class: 'v', text: value }));
+    card.appendChild(html('p', { class: 'note', text: note }));
+    return card;
+  };
+  kpis.appendChild(tile('Live pursuits', fmtInt(live.length),
+    `${fmtUsd(sum(live.map((p) => p.estimatedValueUsd)))} estimated across the pipeline`));
+  kpis.appendChild(tile('Blocked on compliance', fmtInt(counts.blocked),
+    counts.blocked === 0 ? 'Nothing in the pipeline is blocked today'
+      : `${fmtUsd(blockedValue)} of estimated value sits behind a blocker`));
+  kpis.appendChild(tile('Deciding within 90 days', fmtInt(decidingSoon.length),
+    blockedSoon.length === 0 ? 'None of them is blocked'
+      : `${fmtInt(blockedSoon.length)} of them ${blockedSoon.length === 1 ? 'is' : 'are'} blocked — the expensive ones`));
+  kpis.appendChild(tile('No compliance review', fmtInt(live.filter((p) => p.complianceReviewedOn === null).length),
+    'Past qualification with nothing recorded'));
+  host.appendChild(kpis);
+
+  const grid = html('div', { class: 'grid-2' });
+
+  /* ---- Pipeline by stage, split by readiness ---- */
+  const STAGE_ORDER = ['Qualifying', 'Capture', 'Proposal', 'Negotiation'];
+  const stageRows = STAGE_ORDER.map((stage) => {
+    const inStage = live.filter((p) => p.stage === stage);
+    return {
+      stage,
+      ready: inStage.filter((p) => readiness.get(p.id).status === 'ready').length,
+      watch: inStage.filter((p) => readiness.get(p.id).status === 'watch').length,
+      blocked: inStage.filter((p) => readiness.get(p.id).status === 'blocked').length,
+      n: inStage.length,
+      value: sum(inStage.map((p) => p.estimatedValueUsd)),
+    };
+  });
+  grid.appendChild(figure({
+    title: 'Pipeline by stage and export readiness',
+    subtitle: 'Where the pipeline sits, and how much of each stage could proceed today.',
+    legend: [
+      { label: 'Ready', color: 'var(--sev-watch)', shape: 'rect' },
+      { label: 'Watch', color: 'var(--sev-serious)', shape: 'rect' },
+      { label: 'Blocked', color: 'var(--sev-critical)', shape: 'rect' },
+    ],
+    footnote: 'Readiness is an ordered scale, so it takes the one-hue ordinal ramp rather than the status palette — the same reasoning as the severity ramp elsewhere on the page. A blocker later in the pipeline is worse than the same blocker at qualification, because the company has by then said more to the customer.',
+    draw: (w) => columns(w, {
+      labels: stageRows.map((r) => r.stage),
+      series: [
+        { label: 'Ready', color: c('--sev-watch'), values: stageRows.map((r) => r.ready) },
+        { label: 'Watch', color: c('--sev-serious'), values: stageRows.map((r) => r.watch) },
+        { label: 'Blocked', color: c('--sev-critical'), values: stageRows.map((r) => r.blocked) },
+      ],
+      stacked: true,
+      yFmt: fmtInt,
+    }),
+    table: {
+      columns: [
+        { key: 'stage', label: 'Stage' }, { key: 'n', label: 'Pursuits', num: true },
+        { key: 'ready', label: 'Ready', num: true }, { key: 'watch', label: 'Watch', num: true },
+        { key: 'blocked', label: 'Blocked', num: true }, { key: 'value', label: 'Estimated value', num: true },
+      ],
+      rows: stageRows.map((r) => ({
+        stage: r.stage, n: fmtInt(r.n), ready: fmtInt(r.ready), watch: fmtInt(r.watch),
+        blocked: fmtInt(r.blocked), value: fmtUsd(r.value),
+      })),
+    },
+  }));
+
+  /* ---- Where the pipeline is going ---- */
+  const byCountry = [...groupBy(live, (p) => p.country).entries()]
+    .map(([country, ps]) => ({
+      label: country, value: sum(ps.map((p) => p.estimatedValueUsd)), n: ps.length,
+      band: ps[0].countryBand,
+      blocked: ps.filter((p) => readiness.get(p.id).status === 'blocked').length,
+    }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 10);
+  grid.appendChild(figure({
+    title: 'Pipeline value by destination',
+    subtitle: 'Estimated value of live pursuits, by where the work would go. Top ten.',
+    footnote: 'Estimated value is the capture team\u2019s figure, carried and never adjusted here — a compliance cockpit has no business forecasting revenue, and multiplying by a win probability would be exactly that. The country exposure band shown on each pursuit is an illustrative placeholder, not a rating of any real country.',
+    draw: (w) => barsH(w, {
+      rows: byCountry, band: 30, bar: 16, labelMax: 150,
+      display: (r) => fmtUsd(r.value),
+      tipTitle: (r) => r.label,
+      tipRows: (r) => [
+        { value: fmtUsdFull(r.value), name: 'estimated value', color: 'var(--magnitude)' },
+        { value: fmtInt(r.n), name: r.n === 1 ? 'live pursuit' : 'live pursuits' },
+        { value: fmtInt(r.blocked), name: 'blocked on compliance' },
+        { value: RISK_LABEL_UI[r.band], name: 'country exposure band' },
+      ],
+    }),
+    table: {
+      columns: [
+        { key: 'country', label: 'Destination' }, { key: 'n', label: 'Pursuits', num: true },
+        { key: 'blocked', label: 'Blocked', num: true }, { key: 'band', label: 'Exposure band' },
+        { key: 'value', label: 'Estimated value', num: true },
+      ],
+      rows: byCountry.map((r) => ({
+        country: r.label, n: fmtInt(r.n), blocked: fmtInt(r.blocked),
+        band: RISK_LABEL_UI[r.band], value: fmtUsd(r.value),
+      })),
+    },
+  }));
+  host.appendChild(grid);
+
+  /* ---- The register, with readiness expanded per pursuit ---- */
+  host.appendChild(html('div', { class: 'section-head' }, [
+    html('p', { class: 'eyebrow', text: 'Records' }),
+    html('h2', { text: 'Pursuit register' }),
+    html('p', { text: 'Open a row for the readiness assessment: what covers this destination today, what is missing, which third parties are engaged in the territory and what state they are in. Every line of it is derived from the other modules at the moment you look.' }),
+  ]));
+
+  const rows = all.slice().sort((a, b) => {
+    const rank = { blocked: 0, watch: 1, ready: 2 };
+    const ra = rank[readiness.get(a.id).status], rb = rank[readiness.get(b.id).status];
+    return ra - rb || a.decisionOn - b.decisionOn;
+  });
+  host.appendChild(sortableTable({
+    rows, caption: 'Pursuit register',
+    focusKey: STATE.view === 'pursuits' ? STATE.focus : null,
+    initial: { key: 'readiness', dir: 'asc' },
+    columns: [
+      { key: 'id', label: 'Pursuit', sort: (p) => p.id, cell: (p) => p.id, expandable: true },
+      { key: 'name', label: 'Opportunity', sort: (p) => p.name, cell: (p) => p.name, wrap: true },
+      { key: 'program', label: 'Program', sort: (p) => p.program, cell: (p) => p.program },
+      { key: 'country', label: 'Destination', sort: (p) => p.country, cell: (p) => p.country },
+      { key: 'channel', label: 'Channel', sort: (p) => p.channel, cell: (p) => p.channel },
+      { key: 'stage', label: 'Stage', sort: (p) => p.stageOrder, cell: (p) => p.stage },
+      { key: 'value', label: 'Estimated', num: true, sort: (p) => p.estimatedValueUsd, cell: (p) => fmtUsd(p.estimatedValueUsd) },
+      {
+        key: 'readiness', label: 'Readiness',
+        sort: (p) => ({ blocked: 0, watch: 1, ready: 2 }[readiness.get(p.id).status]),
+        cell: (p) => (isLivePursuit(p) ? READINESS_META[readiness.get(p.id).status].label : '—'),
+      },
+      { key: 'decision', label: 'Decision', sort: (p) => p.decisionOn.getTime(), cell: (p) => fmtDate(p.decisionOn) },
+    ],
+    detail: (p) => {
+      const r = readiness.get(p.id);
+      const box = html('div', { class: 'detailbox' });
+
+      const facts = html('div', {}, [html('h4', { text: 'Pursuit' })]);
+      const kv = (k, v) => facts.appendChild(html('div', { class: 'kv' }, [html('span', { text: k }), html('span', { text: v })]));
+      kv('Program', `${p.program} — ${p.mission}`);
+      kv('Destination', `${p.country} (${p.region})`);
+      kv('Channel', p.channel);
+      kv('Stage', p.stage);
+      kv('Estimated value', fmtUsdFull(p.estimatedValueUsd));
+      kv('Capture lead', p.captureLead);
+      kv('Compliance owner', p.owner);
+      kv('Decision expected', fmtDate(p.decisionOn));
+      kv('Compliance review', p.complianceReviewedOn ? fmtDate(p.complianceReviewedOn) : 'None recorded');
+      kv('Technical data in scope', p.requiresTechTransfer ? 'Yes' : 'No');
+      box.appendChild(facts);
+
+      /* A pursuit that is awarded or lost is not "blocked" — the question is
+         closed, and printing a live verdict against it would be a statement
+         about a decision that has already been made. */
+      const closed = !isLivePursuit(p);
+      const assess = html('div', {}, [html('h4', {
+        text: closed ? `Export readiness — ${p.stage.toLowerCase()}, assessed at close`
+          : `Export readiness — ${READINESS_META[r.status].label}`,
+      })]);
+      const al = html('ul');
+      if (closed) {
+        al.appendChild(html('li', {}, [
+          html('span', { class: 'ref', text: '·' }),
+          html('span', { class: 'muted', text: `This pursuit is ${p.stage.toLowerCase()}. What follows is what the record would show against it today, not a live judgement.` }),
+        ]));
+      }
+      for (const bl of r.blockers) {
+        al.appendChild(html('li', {}, [
+          html('span', { class: 'ref', text: SEVERITY_META.critical.icon }),
+          html('span', { text: bl }),
+        ]));
+      }
+      for (const wt of r.watch) {
+        al.appendChild(html('li', {}, [
+          html('span', { class: 'ref', text: SEVERITY_META.watch.icon }),
+          html('span', { text: wt }),
+        ]));
+      }
+      for (const nt of r.notes) {
+        al.appendChild(html('li', {}, [
+          html('span', { class: 'ref', text: '·' }),
+          html('span', { class: 'muted', text: nt }),
+        ]));
+      }
+      if (!r.blockers.length && !r.watch.length && !r.notes.length) {
+        al.appendChild(html('li', {}, [html('span', { text: 'Nothing outstanding against this pursuit.' })]));
+      }
+      assess.appendChild(al);
+      box.appendChild(assess);
+
+      const cover = html('div', {}, [html('h4', { text: `Authorizations covering ${p.country}` })]);
+      const cl = html('ul');
+      if (!r.liveToCountry.length) {
+        cl.appendChild(html('li', {}, [html('span', { text: 'No live authorization names this destination.' })]));
+      }
+      for (const a of r.liveToCountry.slice(0, 8)) {
+        cl.appendChild(html('li', {}, [
+          html('span', { class: 'ref', text: a.kind }),
+          html('span', {}, [
+            html('button', {
+              class: 'drill', type: 'button', text: a.id,
+              'data-fk': `pursuit-auth:${p.id}:${a.id}`,
+              title: `Open ${a.id} in the Authorizations detail table`,
+              onclick: () => { STATE.view = 'auth'; STATE.focus = a.id; render(); },
+            }),
+            html('span', { class: 'muted', text: ` expires ${fmtDate(a.expiresOn)}` }),
+          ]),
+        ]));
+      }
+      for (const k of r.missingKinds) {
+        cl.appendChild(html('li', {}, [
+          html('span', { class: 'ref', text: '—' }),
+          html('span', { text: `${k} required, none live` }),
+        ]));
+      }
+      cover.appendChild(cl);
+      box.appendChild(cover);
+
+      const tp = html('div', {}, [html('h4', { text: `Third parties in ${p.country}` })]);
+      const tl = html('ul');
+      if (!r.agents.length) {
+        tl.appendChild(html('li', {}, [html('span', { text: p.usesIntermediary ? 'None of record, and this is a direct commercial sale.' : 'None engaged.' })]));
+      }
+      for (const t of r.agents) {
+        const issues = intermediaryIssues(t, at);
+        tl.appendChild(html('li', {}, [
+          html('span', { class: 'ref', text: issues.length ? SEVERITY_META.serious.icon : SEVERITY_META.good.icon }),
+          html('span', {}, [
+            html('button', {
+              class: 'drill', type: 'button', text: t.name,
+              'data-fk': `pursuit-tp:${p.id}:${t.id}`,
+              title: `Open ${t.name} in the Anti-corruption register`,
+              onclick: () => { STATE.view = 'anticorruption'; STATE.focus = t.id; render(); },
+            }),
+            html('span', { class: 'muted', text: ` ${t.role.toLowerCase()} · ${issues.length ? issues[0].text : 'in good standing'}` }),
+          ]),
+        ]));
+      }
+      tp.appendChild(tl);
+      box.appendChild(tp);
+      return box;
+    },
+  }));
 }
 
 /* ============================================================================
@@ -2124,6 +2963,169 @@ const partInRegime = (p, regime) => regime === 'all' || p.jurisdiction === null 
 const partsOn = (a) => a.lines.map((l) => PART_INDEX.get(l.partNumber)).filter(Boolean);
 /** The line a part sits on, for a rule that has to name where it is listed. */
 const lineFor = (a, partNumber) => a.lines.find((l) => l.partNumber === partNumber) || null;
+/* ============================================================================
+   ANTI-CORRUPTION AND PURSUIT DERIVATIONS
+   ========================================================================== */
+
+const RISK_LABEL_UI = { 1: 'Lower', 2: 'Moderate', 3: 'Elevated', 4: 'Higher' };
+
+/** Refresh cycles shorten as engagement risk rises — a tier that does not
+    change what the programme does is decoration. */
+const DILIGENCE_CYCLE_YEARS = { 1: 3, 2: 3, 3: 2, 4: 1 };
+const SCREEN_VALID_DAYS = 365;
+/** Commission above this, for any role, is the band the policy asks to be
+    justified in writing rather than a threshold of legality. */
+const COMMISSION_REVIEW_RATE = 0.09;
+const GIFT_PREAPPROVAL_USD = 250;
+
+const diligenceOverdue = (t, at) => t.lastDiligenceOn === null || (t.refreshDueOn !== null && t.refreshDueOn <= at);
+const screenStale = (t, at) => t.lastScreenedOn === null || daysBetween(t.lastScreenedOn, at) > SCREEN_VALID_DAYS;
+const engagedAt = (t, at) => t.engagedOn <= at;
+const activeIntermediaries = (list, at) => (list || []).filter((t) => engagedAt(t, at) && t.contractEndsOn > at);
+
+/** Every reason a third party is not in good standing, named. A single
+    composite score would be easier to draw and impossible to act on — the
+    remediation for a stale screen is not the remediation for a red flag. */
+function intermediaryIssues(t, at) {
+  const out = [];
+  if (t.screenHit) out.push({ key: 'screen-hit', material: true, text: 'Restricted-party screening returned a potential match that is not resolved' });
+  if (diligenceOverdue(t, at)) {
+    out.push({
+      key: 'diligence', material: true,
+      text: t.lastDiligenceOn === null ? 'No due diligence of record' : `Due diligence refresh passed ${fmtDate(t.refreshDueOn)}`,
+    });
+  }
+  if (screenStale(t, at)) {
+    out.push({
+      key: 'screen-stale', material: true,
+      text: t.lastScreenedOn === null ? 'Never screened against restricted-party lists' : `Last screened ${fmtDate(t.lastScreenedOn)}`,
+    });
+  }
+  if (t.commissionRate > COMMISSION_REVIEW_RATE) out.push({ key: 'commission', material: true, text: `Commission at ${fmtPct(t.commissionRate, 1)} is above the ${fmtPct(COMMISSION_REVIEW_RATE, 0)} written-justification band` });
+  if (t.redFlags.length) out.push({ key: 'red-flag', material: true, text: t.redFlags.join('; ') });
+  /* Housekeeping, and marked as such. An unsigned certification and a lapsed
+     training record are real gaps worth closing, but pooling them with an
+     unresolved screening match into one "not in good standing" flag is the
+     same mistake as pooling a 20-item sample with a 4,000-record population
+     test: the number goes up, and it stops telling anyone what to do. */
+  if (!t.certificationOnFile) out.push({ key: 'certification', material: false, text: 'No signed anti-corruption certification on file' });
+  if (!t.trainingCurrent) out.push({ key: 'training', material: false, text: 'Anti-corruption training not current' });
+  return out;
+}
+
+const materialIssues = (t, at) => intermediaryIssues(t, at).filter((i) => i.material);
+
+/** Headline measures for the anti-corruption module. */
+function antiCorruptionMeasures(slice, at) {
+  const active = activeIntermediaries(slice.intermediaries, at);
+  const gifts = (slice.giftsLog || []).filter((g) => g.occurredOn <= at && daysBetween(g.occurredOn, at) <= 365);
+  const flagged = active.filter((t) => materialIssues(t, at).length > 0);
+  const housekeeping = active.filter((t) => materialIssues(t, at).length === 0
+    && intermediaryIssues(t, at).length > 0);
+  return {
+    activeCount: active.length,
+    higherRiskCount: active.filter((t) => t.engagementTier >= 3).length,
+    diligenceOverdueCount: active.filter((t) => diligenceOverdue(t, at)).length,
+    screenStaleCount: active.filter((t) => screenStale(t, at)).length,
+    screenHitCount: active.filter((t) => t.screenHit).length,
+    pepCount: active.filter((t) => t.pepExposure).length,
+    redFlagCount: active.filter((t) => t.redFlags.length > 0).length,
+    materialCount: flagged.length,
+    housekeepingOnlyCount: housekeeping.length,
+    inGoodStanding: active.length - flagged.length - housekeeping.length,
+    commissionExposureUsd: sum(active.map((t) => t.paidYtdUsd)),
+    giftsCount: gifts.length,
+    giftsToOfficials: gifts.filter((g) => g.recipientIsOfficial).length,
+    giftsUnapproved: gifts.filter((g) => !g.preApproved && g.valueUsd >= GIFT_PREAPPROVAL_USD).length,
+    giftsValueUsd: sum(gifts.map((g) => g.valueUsd)),
+  };
+}
+
+/* Pursuit readiness — the cross-module question, and the reason this record
+   exists. Nothing here is stored: it is recomputed from the authorizations
+   that name the program, the classification state of that program's parts, the
+   third parties engaged in the territory, and the destination itself. A stored
+   readiness flag is a readiness flag that goes stale the moment any of those
+   four move, which is exactly when someone would rely on it. */
+const PURSUIT_LIVE_STAGES = new Set(['Qualifying', 'Capture', 'Proposal', 'Negotiation']);
+const isLivePursuit = (p) => PURSUIT_LIVE_STAGES.has(p.stage);
+
+function pursuitReadiness(pursuit, slice, at) {
+  const programAuths = slice.authorizations.filter((a) => a.program === pursuit.program);
+  const liveToCountry = liveAuths(programAuths, at).filter((a) => a.destinations.includes(pursuit.country));
+  const haveKinds = new Set(liveToCountry.map((a) => a.kind));
+  const missingKinds = pursuit.needsAuthorizationKinds.filter((k) => !haveKinds.has(k));
+  const pendingKinds = new Set(programAuths.filter((a) => isPendingAt(a, at) && a.destinations.includes(pursuit.country)).map((a) => a.kind));
+
+  const programParts = slice.classifications.filter((p) => p.program === pursuit.program);
+  const known = knownParts(programParts, at);
+  const undetermined = undeterminedParts(programParts, at);
+
+  const agents = activeIntermediaries(slice.intermediaries, at)
+    .filter((t) => t.program === pursuit.program && t.country === pursuit.country);
+  const agentsWithIssues = agents.filter((t) => materialIssues(t, at).length > 0);
+
+  /* Blockers stop a deal; watch items are things somebody has to own before it
+     closes. Keeping them apart is what makes the status worth reading — a list
+     that calls everything a blocker is a list nobody reads twice. */
+  const blockers = [];
+  const watch = [];
+
+  for (const k of missingKinds) {
+    (pendingKinds.has(k) ? watch : blockers).push(pendingKinds.has(k)
+      ? `${k} to ${pursuit.country} is in adjudication, not yet issued`
+      : `No live ${k} covers ${pursuit.country}`);
+  }
+  if (pursuit.usesIntermediary && agents.length === 0) {
+    blockers.push(`Direct commercial sale with no third party of record in ${pursuit.country}`);
+  }
+  for (const t of agentsWithIssues) {
+    const issues = intermediaryIssues(t, at);
+    const hard = issues.some((x) => x.key === 'screen-hit' || x.key === 'red-flag');
+    const lead = issues.find((x) => x.material) || issues[0];
+    (hard ? blockers : watch).push(`${t.name}: ${lead.text}`);
+  }
+  /* Classification is judged on the parts that would actually move under the
+     authorizations covering this destination, not on the program's whole item
+     master. Program-wide coverage never reaches 100% anywhere, so testing it
+     raised an item against every pursuit on the page and no pursuit could ever
+     read as ready — a status that is always the same status is not a status.
+     The specific question is answerable and worth answering: is anything on
+     the licences that would carry this deal still undetermined? */
+  const partsOnRoute = [...new Set(liveToCountry.flatMap((a) => partsOn(a)))];
+  const undeterminedOnRoute = partsOnRoute.filter((p) => p.determinedOn === null || p.determinedOn > at);
+  if (undeterminedOnRoute.length > 0) {
+    blockers.push(`${fmtInt(undeterminedOnRoute.length)} part${undeterminedOnRoute.length === 1 ? '' : 's'} on the authorizations covering ${pursuit.country} ${undeterminedOnRoute.length === 1 ? 'has' : 'have'} no determination of record`);
+  }
+  if (pursuit.requiresTechTransfer && !haveKinds.has('TAA') && !haveKinds.has('MLA')) {
+    blockers.push('Technical data transfer is in scope with no agreement covering it');
+  }
+  if (pursuit.complianceReviewedOn === null && pursuit.stageOrder >= 2) {
+    watch.push('No trade compliance review recorded against this pursuit');
+  }
+
+  /* Context, deliberately not a blocker or a watch item. An elevated country
+     band and an imperfect program-wide coverage figure are both things the
+     reader should see beside the decision; neither means the pursuit is not
+     ready, and folding them into the status was what stopped the status
+     discriminating. */
+  const notes = [];
+  if (pursuit.countryBand >= 3) notes.push(`${pursuit.country} sits in the higher country exposure band`);
+  if (undetermined.length > 0) {
+    notes.push(`${fmtInt(undetermined.length)} of ${fmtInt(known.length)} ${pursuit.program} parts across the program are undetermined`);
+  }
+  if (pursuit.requiresOffset) notes.push('Offset obligation in scope');
+
+  return {
+    status: blockers.length ? 'blocked' : watch.length ? 'watch' : 'ready',
+    blockers, watch, notes,
+    liveToCountry, missingKinds, pendingKinds: [...pendingKinds],
+    agents, agentsWithIssues,
+    knownParts: known.length, undeterminedParts: undetermined.length,
+    coverage: known.length ? (known.length - undetermined.length) / known.length : null,
+  };
+}
+
 /** Authorizations that have a replacement application pending as of `at`. */
 const renewalsInFlight = (auths, at) => new Set(
   auths.filter((a) => a.renewalOfId && isPendingAt(a, at)).map((a) => a.renewalOfId));
@@ -2438,6 +3440,166 @@ const RULES = [
         owner: f.owner,
         onsetOn: f.dueOn,
         cite: 'Policy: corrective action commitment', view: 'process', focus: c.id,
+      })),
+  },
+  /* ---- Anti-corruption ------------------------------------------------
+     These run in the same queue as everything else, deliberately. A separate
+     anti-corruption queue is how a compliance function ends up with two lists
+     and one analyst who reads neither: the executive asks "what needs my
+     attention", not "what needs my attention under Part 130". Citations follow
+     the same discipline — the FCPA's accounting and anti-bribery provisions
+     are statute, and everything the internal programme requires beyond them is
+     labelled as policy. */
+  {
+    key: 'screen-hit-unresolved',
+    severity: 'critical',
+    name: 'Restricted-party screening match on an engaged third party is unresolved',
+    run: (s, at) => activeIntermediaries(s.intermediaries, at)
+      .filter((t) => t.screenHit)
+      .map((t) => ({
+        subject: t.id,
+        title: `${t.name} — unresolved screening match`,
+        why: `${t.name} is engaged as a ${t.role.toLowerCase()} in ${t.country} and a restricted-party screen returned a potential match that carries no resolution in the record. Payments and shipments touching this party should hold until the match is cleared or confirmed. Confirm the identity against the list entry and refer to trade counsel.`,
+        value: fmtUsdFull(t.paidYtdUsd), valueLabel: 'paid year to date',
+        meta: [t.role, t.country, `${RISK_LABEL_UI[t.engagementTier]} engagement risk`, `Engaged ${fmtDate(t.engagedOn)}`],
+        owner: t.owner, onsetOn: t.lastScreenedOn || t.engagedOn,
+        cite: 'Policy: screening matches resolved before payment',
+        view: 'anticorruption', focus: t.id,
+      })),
+  },
+  {
+    key: 'intermediary-red-flag',
+    severity: 'critical',
+    name: 'Red flag raised on an engaged third party',
+    run: (s, at) => activeIntermediaries(s.intermediaries, at)
+      .filter((t) => t.redFlags.length > 0)
+      .map((t) => ({
+        subject: t.id,
+        title: `${t.name} — ${t.redFlags.length === 1 ? 'red flag' : `${t.redFlags.length} red flags`} recorded`,
+        why: `${t.redFlags.join('. ')}. ${t.name} is engaged in ${t.country} at ${fmtPct(t.commissionRate, 1)} commission. A red flag is a fact requiring assessment, not a conclusion — record the assessment and the decision, because the absence of one is what an enforcement review finds.`,
+        value: `${t.redFlags.length}`, valueLabel: t.redFlags.length === 1 ? 'red flag' : 'red flags',
+        meta: [t.role, t.country, `${RISK_LABEL_UI[t.engagementTier]} engagement risk`, t.diligenceLevel + ' diligence'],
+        owner: t.owner, onsetOn: t.lastDiligenceOn || t.engagedOn,
+        cite: '15 U.S.C. 78dd-1 (FCPA anti-bribery)',
+        view: 'anticorruption', focus: t.id,
+      })),
+  },
+  {
+    key: 'diligence-overdue',
+    severity: 'serious',
+    name: 'Third-party due diligence not refreshed within its cycle',
+    run: (s, at) => activeIntermediaries(s.intermediaries, at)
+      .filter((t) => diligenceOverdue(t, at))
+      .map((t) => {
+        const cycle = DILIGENCE_CYCLE_YEARS[t.engagementTier];
+        return {
+          subject: t.id,
+          title: t.lastDiligenceOn === null
+            ? `${t.name} — engaged with no due diligence of record`
+            : `${t.name} — diligence refresh ${fmtDuration(daysBetween(t.refreshDueOn, at))} past due`,
+          why: `${t.name} sits at ${RISK_LABEL_UI[t.engagementTier].toLowerCase()} engagement risk, which carries a ${cycle}-year refresh cycle. ${t.lastDiligenceOn === null ? 'No diligence file exists.' : `The last file is dated ${fmtDate(t.lastDiligenceOn)}.`} Diligence is the control that makes the relationship defensible; without a current file the company cannot show what it knew or when.`,
+          value: t.lastDiligenceOn === null ? 'Never' : fmtDuration(daysBetween(t.refreshDueOn, at)),
+          valueLabel: t.lastDiligenceOn === null ? 'diligenced' : 'past due',
+          meta: [t.role, t.country, `${cycle}-year cycle`, fmtUsdFull(t.paidYtdUsd) + ' paid YTD'],
+          owner: t.owner, onsetOn: t.refreshDueOn || t.engagedOn,
+          cite: `Policy: ${cycle}-year diligence refresh at this risk tier`,
+          view: 'anticorruption', focus: t.id,
+        };
+      }),
+  },
+  {
+    key: 'screening-stale',
+    severity: 'serious',
+    name: 'Third party not screened within the screening cycle',
+    run: (s, at) => activeIntermediaries(s.intermediaries, at)
+      .filter((t) => screenStale(t, at) && !t.screenHit)
+      .map((t) => ({
+        subject: t.id,
+        title: t.lastScreenedOn === null
+          ? `${t.name} — never screened against restricted-party lists`
+          : `${t.name} — last screened ${fmtDate(t.lastScreenedOn)}`,
+        why: `Restricted-party lists change continuously, so a screen is a statement about a date rather than a permanent clearance. ${t.lastScreenedOn === null ? 'No screen of this party is recorded at all.' : `This one is ${fmtDuration(daysBetween(t.lastScreenedOn, at))} old against a ${SCREEN_VALID_DAYS}-day cycle.`} Re-screen and record the date.`,
+        value: t.lastScreenedOn === null ? 'Never' : fmtDuration(daysBetween(t.lastScreenedOn, at)),
+        valueLabel: t.lastScreenedOn === null ? 'screened' : 'since last screen',
+        meta: [t.role, t.country, `${RISK_LABEL_UI[t.engagementTier]} engagement risk`],
+        owner: t.owner, onsetOn: t.lastScreenedOn ? addDays(t.lastScreenedOn, SCREEN_VALID_DAYS) : t.engagedOn,
+        cite: `Policy: ${SCREEN_VALID_DAYS}-day screening cycle`,
+        view: 'anticorruption', focus: t.id,
+      })),
+  },
+  {
+    key: 'commission-above-band',
+    severity: 'serious',
+    name: 'Commission above the band that requires written justification',
+    run: (s, at) => activeIntermediaries(s.intermediaries, at)
+      .filter((t) => t.commissionRate > COMMISSION_REVIEW_RATE)
+      .map((t) => ({
+        subject: t.id,
+        title: `${t.name} — commission at ${fmtPct(t.commissionRate, 1)}`,
+        why: `${t.name} is paid ${fmtPct(t.commissionRate, 1)} as a ${t.role.toLowerCase()} in ${t.country}, above the ${fmtPct(COMMISSION_REVIEW_RATE, 0)} internal band. A rate above the band is not improper in itself; what the policy asks for is a written justification tying it to identifiable services, and that is what an enforcement review looks for first.`,
+        value: fmtPct(t.commissionRate, 1), valueLabel: 'commission rate',
+        meta: [t.role, t.country, `${RISK_LABEL_UI[t.engagementTier]} engagement risk`, fmtUsdFull(t.paidYtdUsd) + ' paid YTD'],
+        owner: t.owner, onsetOn: t.engagedOn,
+        cite: '15 U.S.C. 78m(b)(2) (FCPA books and records)',
+        view: 'anticorruption', focus: t.id,
+      })),
+  },
+  {
+    key: 'gift-not-preapproved',
+    severity: 'watch',
+    name: 'Gift or hospitality above the threshold recorded without pre-approval',
+    run: (s, at) => (s.giftsLog || [])
+      .filter((g) => g.occurredOn <= at && !g.preApproved && g.valueUsd >= GIFT_PREAPPROVAL_USD
+        && daysBetween(g.occurredOn, at) <= 365)
+      .map((g) => ({
+        subject: g.id,
+        title: `${g.id} — ${g.kind.toLowerCase()} of ${fmtUsdFull(g.valueUsd)} without pre-approval`,
+        why: `A ${g.kind.toLowerCase()} of ${fmtUsdFull(g.valueUsd)} in ${g.country}${g.recipientIsOfficial ? ', recorded against a government official,' : ''} carries no pre-approval. Pre-approval is the control; recording afterwards documents the event without ever testing it. The pattern matters more than any single entry — record the approval decision retrospectively and note why it was late.`,
+        value: fmtUsdFull(g.valueUsd), valueLabel: g.recipientIsOfficial ? 'to an official' : 'recorded',
+        meta: [g.kind, g.country, g.program, fmtDate(g.occurredOn)],
+        owner: g.owner, onsetOn: g.occurredOn,
+        cite: `Policy: pre-approval above ${fmtUsdFull(GIFT_PREAPPROVAL_USD)}`,
+        view: 'anticorruption', focus: g.id,
+      })),
+  },
+  /* ---- International pursuits ------------------------------------------
+     A pursuit rule fires on something that has NOT happened yet, which is the
+     only place on this page where compliance can still change the outcome
+     rather than describe it. */
+  {
+    key: 'pursuit-blocked',
+    severity: 'serious',
+    name: 'Live pursuit with an unresolved export or third-party blocker',
+    run: (s, at) => (s.pursuits || [])
+      .filter((p) => isLivePursuit(p))
+      .map((p) => ({ p, r: pursuitReadiness(p, s, at) }))
+      .filter((x) => x.r.status === 'blocked')
+      .map(({ p, r }) => ({
+        subject: p.id,
+        title: `${p.id} — ${p.name} has ${r.blockers.length === 1 ? 'a blocker' : `${r.blockers.length} blockers`}`,
+        why: `${r.blockers.join('. ')}. This pursuit is at ${p.stage.toLowerCase()} with a decision expected ${fmtDate(p.decisionOn)}. Every item here is cheaper to resolve now than after a commitment has been made to the customer.`,
+        value: `${r.blockers.length}`, valueLabel: r.blockers.length === 1 ? 'blocker' : 'blockers',
+        meta: [p.program, p.country, p.channel, `Decision ${fmtDate(p.decisionOn)}`],
+        owner: p.owner, onsetOn: p.complianceReviewedOn || addDays(p.decisionOn, -365),
+        cite: 'Policy: export readiness before commitment',
+        view: 'pursuits', focus: p.id,
+      })),
+  },
+  {
+    key: 'pursuit-unreviewed',
+    severity: 'watch',
+    name: 'Pursuit past qualification with no trade compliance review',
+    run: (s, at) => (s.pursuits || [])
+      .filter((p) => isLivePursuit(p) && p.stageOrder >= 2 && p.complianceReviewedOn === null)
+      .map((p) => ({
+        subject: p.id,
+        title: `${p.id} — ${p.name} has no compliance review`,
+        why: `This pursuit reached ${p.stage.toLowerCase()} without a trade compliance review of record. The questions it would answer — what moves, to whom, under what authorization, through which third party — get harder to answer usefully the further a capture runs.`,
+        value: p.stage, valueLabel: 'current stage',
+        meta: [p.program, p.country, p.channel, fmtUsd(p.estimatedValueUsd) + ' estimated'],
+        owner: p.owner, onsetOn: addDays(p.decisionOn, -420),
+        cite: 'Policy: compliance review at capture',
+        view: 'pursuits', focus: p.id,
       })),
   },
   {
@@ -3163,6 +4325,9 @@ function currentSlice() {
     (STATE.program === 'all' || a.program === STATE.program) &&
     (STATE.site === 'all' || a.site === STATE.site) &&
     (STATE.regime === 'all' || a.regime === STATE.regime);
+  const keepByProgram = (x) =>
+    (STATE.program === 'all' || x.program === STATE.program) &&
+    (STATE.site === 'all' || x.site === STATE.site);
   const keepPart = (p) =>
     (STATE.program === 'all' || p.program === STATE.program) &&
     (STATE.site === 'all' || p.site === STATE.site) &&
@@ -3177,6 +4342,15 @@ function currentSlice() {
        why SOP conformance moves with the filters while a manual sample result
        — taken once, across the business — does not. */
     controls: DATA.controls,
+    /* Third parties, gifts and pursuits all carry a program and a site, so
+       they scope like any other program record. None of them carries a
+       regime: an agent is not ITAR or EAR, and filtering them by one would
+       silently empty the anti-corruption view whenever a regime was chosen —
+       the same class of bug as the classification filter. They pass the
+       regime filter through untouched, and the views say so. */
+    intermediaries: DATA.intermediaries.filter(keepByProgram),
+    giftsLog: DATA.giftsLog.filter(keepByProgram),
+    pursuits: DATA.pursuits.filter(keepByProgram),
   };
 }
 
@@ -3546,7 +4720,7 @@ function renderPosture(host, slice) {
         act.appendChild(html('button', {
           class: 'btn btn-sm', type: 'button', text: 'Open record',
           'data-fk': `drill:${it.actionId}`,
-          title: `Open ${it.subject} in the ${{ auth: 'Authorizations', class: 'Classification', process: 'Process compliance' }[it.view]} detail table`,
+          title: `Open ${it.subject} in the ${{ auth: 'Authorizations', class: 'Classification', process: 'Process compliance', pursuits: 'Pursuits and programs', anticorruption: 'Anti-corruption' }[it.view]} detail table`,
           onclick: () => { STATE.view = it.view; STATE.focus = it.focus; STATE.returnTo = 'posture'; render(); },
         }));
         const sel = html('select', { 'aria-label': `Owner of ${it.subject}`, 'data-fk': `owner:${it.actionId}` });
@@ -4530,7 +5704,10 @@ function render() {
   hideTip();
   const slice = currentSlice();
 
-  const viewName = { posture: 'Posture', auth: 'Authorizations', class: 'Classification', process: 'Process compliance' }[STATE.view];
+  const viewName = {
+    posture: 'Posture', auth: 'Authorizations', class: 'Classification',
+    pursuits: 'Pursuits and programs', anticorruption: 'Anti-corruption', process: 'Process compliance',
+  }[STATE.view];
   document.getElementById('print-scope').textContent =
     `${viewName} · Program: ${STATE.program === 'all' ? 'All' : STATE.program}`
     + ` · Site: ${STATE.site === 'all' ? 'All' : STATE.site}`
@@ -4543,7 +5720,10 @@ function render() {
     ? `${fmtInt(slice.authorizations.length)} of ${fmtInt(DATA.authorizations.length)} authorizations · ${fmtInt(slice.classifications.length)} of ${fmtInt(DATA.classifications.length)} parts in scope`
     : `${fmtInt(DATA.authorizations.length)} authorizations · ${fmtInt(DATA.classifications.length)} parts in scope`;
 
-  const panes = { posture: 'view-posture', auth: 'view-auth', class: 'view-class', process: 'view-process' };
+  const panes = {
+    posture: 'view-posture', auth: 'view-auth', class: 'view-class',
+    pursuits: 'view-pursuits', anticorruption: 'view-anticorruption', process: 'view-process',
+  };
   for (const [key, id] of Object.entries(panes)) {
     const pane = document.getElementById(id);
     const active = key === STATE.view;
@@ -4558,6 +5738,8 @@ function render() {
   if (STATE.view === 'posture') renderPosture(document.getElementById('view-posture'), slice);
   else if (STATE.view === 'auth') renderAuthorizations(document.getElementById('view-auth'), slice);
   else if (STATE.view === 'class') renderClassification(document.getElementById('view-class'), slice);
+  else if (STATE.view === 'pursuits') renderPursuits(document.getElementById('view-pursuits'), slice);
+  else if (STATE.view === 'anticorruption') renderAntiCorruption(document.getElementById('view-anticorruption'), slice);
   else renderProcess(document.getElementById('view-process'), slice);
 
   if (priorFk) {
@@ -4609,6 +5791,21 @@ function selfCheck() {
     && overShippedLines(a, at).length && !isLive(a, at));
   if (overButDropped.length) fail.push(`${overButDropped.length} over-shipped authorizations are outside liveAuths`);
 
+  /* The same standing rule applies to the modules added later: a third party
+     or a pursuit must not be able to leave scope just because the condition
+     being looked for is present. */
+  for (const t of DATA.intermediaries) {
+    if (t.screenHit && !activeIntermediaries(DATA.intermediaries, at).includes(t) && t.contractEndsOn > at) {
+      fail.push(`third party ${t.id} has an unresolved screening match but is outside the active population`);
+    }
+  }
+  const livePursuitsWithBlockers = DATA.pursuits.filter((p) => isLivePursuit(p)
+    && pursuitReadiness(p, DATA, at).blockers.length);
+  const queuedPursuits = new Set(RULES.find((r) => r.key === 'pursuit-blocked').run(DATA, at).map((x) => x.subject));
+  for (const p of livePursuitsWithBlockers) {
+    if (!queuedPursuits.has(p.id)) fail.push(`pursuit ${p.id} has blockers but raises no action`);
+  }
+
   if (fail.length) {
     console.error('[self-check] ' + fail.length + ' invariant(s) broken:\n  ' + fail.join('\n  '));
   }
@@ -4622,7 +5819,7 @@ function boot() {
   selfCheck();
   document.getElementById('asof-chip').textContent = `Extract as of ${fmtDate(AS_OF)}`;
   document.getElementById('note-scope').textContent =
-    'Three modules are in scope: authorizations and agreements; jurisdiction and classification; and process compliance, the testing of the written procedures themselves. Deliberately out of scope for this proof of concept, and the obvious next modules: restricted party screening, foreign nationals and deemed exports, AES/EEI filing accuracy, and voluntary disclosure tracking.';
+    'Five modules are in scope: authorizations and agreements; jurisdiction and classification; international pursuits and programs, which reads the other modules rather than holding its own view of them; global anti-corruption monitoring of third parties acting for the company abroad; and process compliance, the testing of the written procedures themselves. Every module feeds one action queue — a compliance function with five queues has none. Deliberately out of scope for this proof of concept, and the obvious next additions: foreign nationals and deemed exports, AES/EEI filing accuracy, voluntary disclosure tracking with its own clock, and restricted-party screening of end users as well as intermediaries.';
 
   const programs = [...new Set(DATA.authorizations.map((a) => a.program))].sort();
   const sites = [...new Set(DATA.authorizations.map((a) => a.site))].sort();
@@ -4670,7 +5867,7 @@ function boot() {
   /* Tabs follow the ARIA tabs pattern: one tab stop for the whole set, with
      the arrow keys moving between them. Tabbing through three tabs to reach
      the content is not what a tablist is supposed to cost. */
-  const TAB_KEYS = ['posture', 'auth', 'class', 'process'];
+  const TAB_KEYS = ['posture', 'auth', 'class', 'pursuits', 'anticorruption', 'process'];
   const selectTab = (key, focus) => {
     if (STATE.view !== key) { STATE.view = key; STATE.focus = null; render(); }
     if (focus) document.getElementById(`tab-${key}`).focus();

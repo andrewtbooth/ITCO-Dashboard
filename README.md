@@ -21,26 +21,21 @@ works from a local copy, an email attachment or a disconnected machine.
 
 ## What it covers
 
-Three modules, chosen as the ones that most directly drive an Empowered
-Official's risk picture — what is authorized, what the items are, and whether the
-procedures are being followed:
+Five modules, one queue.
 
-| Module | What it answers |
-|---|---|
-| **Authorizations & agreements** | What is authorized, what is about to lapse, whether anything has been filed to replace it, how much authorized value is left, and which conditions have not been acknowledged |
-| **Jurisdiction & classification** | What share of the item master has a determination of record, how old the backlog is, and where the control concentration sits |
-| **Process compliance** | Whether the written SOP is the procedure being followed, how strong the evidence behind each control is, and whether audit findings get closed |
+- **Authorizations and agreements** — licences and Part 124 agreements, their
+  line items, provisos, shipments, renewals and consumption against both
+  ceilings.
+- **Jurisdiction and classification** — the determination of record for every
+  part, its basis, its re-review cycle, and the backlog that has none.
+- **International pursuits and programs** — what the company is chasing abroad,
+  and whether it could lawfully deliver it today.
+- **Global anti-corruption monitoring** — the third parties acting for the
+  company abroad, what they are paid, and when anybody last looked at them.
+- **Process compliance** — whether the written procedure is the procedure being
+  followed.
 
-The first two are on one page so they can check each other. The parts named on an
-authorization join to the item master, which is what lets the dashboard ask the
-question neither module can answer alone: **is anything being exported under an
-authorization that does not cover it?**
-
-Deliberately out of scope for this POC, and the obvious next modules: restricted
-party screening, foreign nationals and deemed exports, AES/EEI filing accuracy,
-and voluntary disclosure tracking.
-
-## The four views
+## The six views
 
 **Posture** opens with the count of open compliance actions, six KPI tiles each
 carrying a 12-month trend, and a prioritized *Needs attention* queue. Every row
@@ -95,6 +90,72 @@ Because automated measures re-derive against the filtered slice, SOP conformance
 moves with the program and site filters while a manual sample result — taken once,
 across the business — does not. The page says so on the tab.
 
+### International pursuits and programs
+
+A pursuit is the only forward-looking record on the page. Everything else
+reports what already happened; a pursuit is where trade compliance can still
+change an outcome instead of describing one.
+
+Its **export readiness is not stored**. It is recomputed, every time you look,
+from four things that live in other modules:
+
+| Input | Question it answers |
+| --- | --- |
+| Live authorizations naming the program and destination | Is there anything that could lawfully carry this? |
+| Parts on those authorizations | Is anything on the route still undetermined? |
+| Third parties engaged in the territory | Is the party we would sell through in good standing? |
+| The destination itself | What exposure band are we operating in? |
+
+A stored readiness flag goes stale the moment any of those four move — which is
+exactly when somebody would rely on it.
+
+Readiness separates **blockers** from **watch items** from **context**. That
+distinction is the whole value of the status: an early version folded the
+program's overall classification coverage and the destination's exposure band
+into the verdict, and because neither is ever perfect, every pursuit on the page
+came back the same and no pursuit could ever read as ready. A status that is
+always the same status is not a status. Classification is now judged on the
+parts that would actually move under the authorizations covering that
+destination, which is both specific and answerable.
+
+Opening a pursuit gives you the authorizations covering that country as links
+into the Authorizations module, and the third parties in that territory as links
+into Anti-corruption. The link runs the other way too: a third party's record
+lists the live pursuits that depend on it, because a party out of standing
+matters more when a bid is riding on it, and that is invisible from the party's
+own record.
+
+### Global anti-corruption monitoring
+
+The unit of record is the third party, because that is where the exposure sits:
+under the FCPA and the UK Bribery Act a company answers for people acting on its
+behalf far more often than for its own employees.
+
+**Risk is a property of the arrangement, not of the country.** The territory's
+exposure band is one input; what the party does, whether its commission sits
+above the written-justification band, and whether it carries political exposure
+are the others. The resulting engagement tier is what sets the diligence refresh
+cycle — one year at the top tier, three at the bottom — because a risk rating
+that does not change what the programme *does* is decoration.
+
+Two things follow from that, and both are deliberate:
+
+- **The country bands are illustrative placeholders and the page says so.** A
+  real deployment binds them to a published index with a source and a vintage.
+  Printing a bare risk verdict against the name of a real country, on a page
+  whose own banner says every record is synthetic, is not a thing this build
+  will do.
+- **Outstanding items are split into material and housekeeping.** An unresolved
+  screening match and a lapsed training record are both gaps, and pooling them
+  into one "not in good standing" flag is the same mistake as pooling a 20-item
+  sample with a 4,000-record population test — the number goes up and stops
+  telling anyone what to do. The register carries both counts separately.
+
+Screening is treated as a distinct question from diligence, with its own clock:
+diligence asks who a party is, screening asks whether a government has already
+said no, and a screen is a statement about a date rather than a permanent
+clearance.
+
 ## Metric definitions
 
 | Metric | Definition |
@@ -134,6 +195,14 @@ entered the item master.
 | Serious | Control not tested within its own frequency | An untested control is not a control; the absence of a test is itself the finding |
 | Serious | Corrective action past its committed date | The deficiency is now documented and unremediated |
 | Serious | Authorized value >85% consumed with >6 months of term remaining | The value will run out long before the authorization does, and an amendment takes longer to obtain than the balance will cover |
+| Critical | Unresolved restricted-party screening match on an engaged third party | A government has already said no to somebody; payments and shipments should hold until the match is cleared or confirmed |
+| Critical | Red flag recorded on an engaged third party | A red flag is a fact requiring assessment, not a conclusion — the absence of a recorded assessment is what an enforcement review finds |
+| Serious | Third-party due diligence not refreshed within its cycle | Without a current file the company cannot show what it knew or when |
+| Serious | Third party not screened within the screening cycle | Lists change continuously, so a screen is a statement about a date |
+| Serious | Commission above the band requiring written justification | Not improper in itself; what the policy asks for is a justification tying it to identifiable services |
+| Serious | Live pursuit with an unresolved export or third-party blocker | Every item is cheaper to resolve before a commitment is made to the customer |
+| Watch | Gift or hospitality above the threshold with no pre-approval | Pre-approval is the control; recording afterwards documents the event without ever testing it |
+| Watch | Pursuit past qualification with no trade compliance review | The questions get harder to answer usefully the further a capture runs |
 | Serious | 3+ provisos not acknowledged on a live authorization | The most common finding in a licensing audit |
 | Serious | Supporting records not on file | Five-year retention applies, 22 CFR 122.5 and 15 CFR 762.2 |
 | Serious | Part in the item master 90+ days without a determination | Blocks shipment, quoting, and foreign-national disclosure decisions |
@@ -144,7 +213,7 @@ entered the item master.
 
 Severity orders the queue, but within a tier the rule kinds are dealt out
 round-robin — one rule matching forty records would otherwise fill the visible
-queue and bury the other sixteen.
+queue and bury the other twenty-four.
 
 The queue is truncated by default, but **never across the critical tier**: the
 default view always runs to the end of critical and a few rows into the next
@@ -166,6 +235,8 @@ setting — never a bare assertion. The citations in use:
 | 15 CFR 750.7 | EAR licence issuance and validity period |
 | 15 CFR 750.7(f), 750.11 | An EAR licence is limited by both quantity and value, subject to shipping tolerances — where the full quantity has not shipped, value may run up to 10% over |
 | 15 CFR 762.2 | EAR records to be retained |
+| 15 U.S.C. 78dd-1 | FCPA anti-bribery provisions — the basis for the red-flag rule |
+| 15 U.S.C. 78m(b)(2) | FCPA books and records — the basis for the commission rule |
 
 **A citation travels with the regime of the record it sits on.** Nothing cites an
 ITAR provision on a BIS licence or the reverse; the rules that run across both
@@ -193,10 +264,12 @@ re-review cycle as its own constant, `REVIEW_CYCLE_YEARS`.
 
 ### What the rules deliberately do not do
 
-There is no rule for restricted party screening, deemed exports, or filing
-accuracy, because those modules are out of scope and a rule that half-checks
-them would be worse than none. Every rule here runs on data the two in-scope
-modules actually hold.
+There is no rule for deemed exports, AES/EEI filing accuracy, or voluntary
+disclosure tracking, because those modules are out of scope and a rule that
+half-checks them would be worse than none. Restricted-party screening is now
+modelled, but only for third-party intermediaries — end users and consignees are
+stored and not yet screened, and that gap is named here rather than left to be
+discovered. Every rule runs on data an in-scope module actually holds.
 
 ## Working the queue
 
@@ -259,8 +332,23 @@ DATA = {
   authorizations: Authorization[],
   classifications: Part[],
   controls: Control[],
+  pursuits: Pursuit[],          // international opportunities
+  intermediaries: ThirdParty[], // anti-corruption
+  giftsLog: GiftEntry[],        // gifts, hospitality, contributions
 }
 ```
+
+A `Pursuit` deliberately stores almost nothing derived — no readiness flag, no
+blocker list, no coverage figure. Those are computed against the other modules
+at read time. What it does store is what the deal *is*: program, destination,
+stage, channel, estimated value, decision date, whether technical data is in
+scope, which authorization kinds it would need, and whether a compliance review
+has happened.
+
+A `ThirdParty` stores the relationship and its two clocks — `lastDiligenceOn`
+with a `refreshDueOn` derived from the engagement tier, and `lastScreenedOn`
+with its own cycle — plus commission, spend, political exposure and any red
+flags recorded in the file.
 
 An authorization carries **line items**, not a flat list of part numbers. Each
 line has its own quantity and value ceiling, and each shipment names the line it
