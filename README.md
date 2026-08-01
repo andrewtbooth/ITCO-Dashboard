@@ -489,12 +489,88 @@ it is switched off under `prefers-reduced-motion`.
   band and from each chart's table view.
 - Tabs follow the ARIA tabs pattern — one tab stop for the set, arrow keys and
   Home/End to move between them. Every table carries a caption as its accessible
-  name, every chart carries its title, and opening a detail row keeps focus on
-  the row you opened.
+  name, and every chart carries its title.
+- **Focus survives a re-render.** Reassigning an owner, clearing an action or
+  opening a record all rebuild the pane, and each one used to drop a keyboard
+  operator at the top of the document and reflow the page under a mouse
+  pointer. Interactive controls carry a stable `data-fk`, and the element
+  wearing the one that had focus gets it back at the scroll position it was at.
+  Where the control was destroyed on purpose — clearing an action removes the
+  row it lived on — focus falls back to the section heading, which re-announces
+  the updated count.
+- **Sort order, open rows and half-chosen dispositions survive too.** They were
+  closure locals and DOM state, so any unrelated action silently discarded
+  them: changing a filter threw away a column sort, closed every open row, and
+  destroyed a disposition picked but not yet committed.
 - Only the visible view holds DOM. Panes that leave the screen are emptied
-  rather than parked, since the active pane is rebuilt from scratch anyway —
-  which keeps the posture view at ~690 nodes and 9 tab stops instead of ~14,700
-  and 490.
+  rather than parked, since the active pane is rebuilt from scratch anyway.
+  Measured on the posture view: **840 nodes and 60 tab stops**, against ~14,700
+  and 490 for a naive build.
+
+  These figures are stated because an earlier version of this file claimed 690
+  nodes and 9 tab stops, which was true when it was written and stopped being
+  true the moment the queue grew a disposition control on every row — 74 extra
+  selects, none of them measured again. A page height of 11,000px and 130 tab
+  stops is what that cost before the queue was rebuilt. An accessibility claim
+  is a measurement with a date on it, not a property.
+
+### What the design review changed
+
+Three designers reviewed the page independently — information design, interaction
+design, and visual system with accessibility. Everything below was measured
+before and after rather than judged by eye.
+
+**The queue became a queue.** Rows were 203–223px of prose, and eighteen of them
+carried the same templated paragraph, so the distinguishing facts were roughly a
+seventh of the ink and nobody could see the shape of their own critical tier
+without eight screens of scrolling. Two selects and a button rendered on every
+row put 74 controls into the page before anyone had decided to act on anything.
+A collapsed row is now one line and one tab stop carrying severity, record,
+what is over and by how much, how late it is and who owns it; the rationale, the
+citation and the controls live in the expansion. Rows went to 41px, the posture
+view from 11,043px to 4,435px, tab stops from 130 to 60, nodes from 2,044 to 840.
+
+**The queue got its own scope.** The three filters at the top of the page answer
+*which records*; severity, owner, rule and a search box answer *which of my
+actions*, which is a different question and the one the page is usually opened
+with. The rules-evaluated table moved above the queue it indexes and its rows
+became buttons, so "27 corrective actions are overdue" is now a route to those
+27 rather than a number under 274 records.
+
+**The KPI row stopped leading with census and means.** Live authorization count
+is the denominator of half the other tiles and actionable by nobody; it gave up
+its slot to value shipped past a ceiling, which had no home above the fold. The
+utilization tile keeps its headline but its note now names the tail — the count
+past the amendment threshold — because the mean sits in the trough of a bimodal
+distribution where almost nothing actually is.
+
+**Ordinal ramps moved off blue.** Blue marked ITAR identity, severity,
+utilization, assurance strength and every single-series magnitude bar at once,
+so every chart on all four tabs was blue and the hue distinguished nothing. The
+ramps are violet now, validated with the skill's own checker in both modes
+(light end 2.34:1, dark end 2.56:1 against a 2:1 ordinal floor), and a new
+`--magnitude` role means a bar saying *how much* never wears the hue that means
+ITAR.
+
+**Contrast and print defects, measured.** The in-bar label threshold switched ink
+at luminance 0.42 where the true crossover — the point at which white and near-
+black contrast equally against the fill — solves to 0.1916, so mid-ramp fills
+took white labels at 2.5–3.0:1. Worst in-bar label contrast is now 5.39:1 light
+and 4.85:1 dark. Print declared `repeat(3, 1fr)` for the KPI row while the
+screen rule two hundred lines above already used `minmax(0, 1fr)` for exactly
+this reason; with the sparkline carrying a hard pixel width the row demanded 956
+of the 688px an A4 page offers at these margins, and the third tile was cut off
+the sheet. It now fits exactly. The audit-readiness meters were painted in status
+colours — a magnitude bar doing a state's job, with `--status-warning` at 1.83:1
+as a data mark, and a 0.2-point difference repainting a whole row amber or
+green. They take one hue; the state stays in the chip, where it has an icon and
+a label.
+
+**One claim the reviewers made did not survive checking.** The lightest ordinal
+step was reported as failing the 3:1 graphical floor at 2.11:1. The rule for an
+ordinal ramp is 2:1 — the validator's own `ORDINAL_LIGHT_FLOOR` — and the bars
+in question are labelled on their own axis, so colour is not the sole
+identifier. It was left alone.
 
 ## Printing
 

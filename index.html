@@ -52,22 +52,34 @@
      status palette: those four steps are a fixed scale for marking state on a
      chip or a meter, and measured as a series set the serious and watch steps
      sit at ΔE 13.6, under the normal-vision floor of 15. Status keeps the
-     chips; the charts take the ramp. */
-  --ord-1:           #86b6ef;
-  --ord-2:           #5598e7;
-  --ord-3:           #256abf;
-  --ord-4:           #0d366b;
-  --util-1:          #86b6ef;
-  --util-2:          #5598e7;
-  --util-3:          #2a78d6;
-  --util-4:          #1c5cab;
-  --util-5:          #0d366b;
-  --sev-watch:       #86b6ef;
-  --sev-serious:     #2a78d6;
-  --sev-critical:    #0d366b;
-  --asr-1:           #86b6ef;
-  --asr-2:           #2a78d6;
-  --asr-3:           #0d366b;
+     chips; the charts take the ramp.
+     The ramps are VIOLET, not the blue they used to be, because blue is the
+     categorical identity of ITAR. With the ramps in blue as well, every chart
+     on all four tabs was blue and the hue had stopped meaning anything — it
+     marked identity, magnitude, severity and assurance at once, so it
+     distinguished nothing. Violet collides with no status colour and with
+     neither categorical slot, which leaves blue free to mean one thing.
+     Both directions validate with scripts/validate_palette.js --ordinal:
+     light end #a99ee9 at 2.34:1, dark end #5a49b5 at 2.56:1, against the
+     2:1 ordinal floor, monotone with adjacent ΔL ≥ 0.06 and ≤ 6° hue spread. */
+  /* The fill for a single-series magnitude chart. Named by its job so that a
+     bar meaning "how much" never wears the hue that means ITAR. */
+  --magnitude:       #6a55c4;
+  --ord-1:           #a99ee9;
+  --ord-2:           #8878da;
+  --ord-3:           #6a55c4;
+  --ord-4:           #31266f;
+  --util-1:          #a99ee9;
+  --util-2:          #8878da;
+  --util-3:          #6a55c4;
+  --util-4:          #4a3aa7;
+  --util-5:          #31266f;
+  --sev-watch:       #a99ee9;
+  --sev-serious:     #6a55c4;
+  --sev-critical:    #31266f;
+  --asr-1:           #a99ee9;
+  --asr-2:           #6a55c4;
+  --asr-3:           #31266f;
 
   /* status — fixed in both modes, never themed, never a series colour */
   --status-good:     #0ca30c;
@@ -76,12 +88,30 @@
   --status-critical: #d03b3b;
   --success-text:    #006300;
 
-  /* type scale */
-  --t-2xs: 11px; --t-xs: 11.5px; --t-sm: 12.5px; --t-md: 13.5px;
-  --t-base: 14px; --t-lg: 16px; --t-xl: 20px; --t-2xl: 28px; --t-hero: 54px;
+  /* Type scale — seven steps, each a visible increment on the one below.
+     This used to carry nine, five of them inside a 3px band (11 / 11.5 / 12.5 /
+     13.5 / 14) at ratios of 1.04 and 1.08. Steps that close are not hierarchy,
+     they are noise: nobody reading the page could tell 11 from 11.5, so the
+     distinctions cost maintenance and bought nothing. Collapsed to 11 / 12.5 /
+     14 below 16, the ratios run 1.14, 1.12, 1.14, 1.25, 1.40, 1.93 — a scale
+     rather than a list of sizes. */
+  --t-2xs: 11px; --t-xs: 12.5px; --t-sm: 14px; --t-md: 16px;
+  --t-lg: 20px; --t-xl: 28px; --t-hero: 54px;
+
+  /* Space scale — one 4px grid, used for padding, margin and gap alike.
+     Before this there were 28 distinct values in play, including 5, 7, 9, 11,
+     13, 15, 22 and 26, and card padding was invented five separate times. The
+     visible cost was a 6px stagger: stacked in the same column at the same
+     outer edge, the KPI tile's content started at one x, the chart card's at
+     another and the hero's at a third, straight down the flagship view. */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-7: 32px; --sp-8: 40px;
+  /* One card padding, shared by every card-like surface, so inner content
+     lines up across the grid no matter which component drew it. */
+  --card-pad: var(--sp-5) var(--sp-5) var(--sp-4);
 
   /* geometry & elevation */
-  --r-sm: 7px; --r-md: 10px; --r-lg: 13px; --r-pill: 999px;
+  --r-sm: 8px; --r-md: 12px; --r-lg: 12px; --r-pill: 999px;
   --shadow-1: 0 1px 2px rgba(11, 11, 11, .04), 0 1px 1px rgba(11, 11, 11, .03);
   --shadow-2: 0 2px 4px rgba(11, 11, 11, .05), 0 6px 16px -6px rgba(11, 11, 11, .10);
   --ease: cubic-bezier(.2, .6, .2, 1);
@@ -106,21 +136,23 @@
     --series-1:       #3987e5;
     --series-2:       #d95926;
     --de-emphasis:    #898781;
-    --ord-1:          #184f95;
-    --ord-2:          #2a78d6;
-    --ord-3:          #6da7ec;
-    --ord-4:          #cde2fb;
-    --util-1:         #184f95;
-    --util-2:         #2a78d6;
-    --util-3:         #5598e7;
-    --util-4:         #86b6ef;
-    --util-5:         #cde2fb;
-    --sev-watch:      #184f95;
-    --sev-serious:    #5598e7;
-    --sev-critical:   #cde2fb;
-    --asr-1:          #184f95;
-    --asr-2:          #5598e7;
-    --asr-3:          #cde2fb;
+    --magnitude:      #8f80de;
+    --magnitude:      #8f80de;
+  --ord-1:          #5a49b5;
+    --ord-2:          #7461cd;
+    --ord-3:          #8f80de;
+    --ord-4:          #d6d0f8;
+    --util-1:         #5a49b5;
+    --util-2:         #7461cd;
+    --util-3:         #8f80de;
+    --util-4:         #aca2ec;
+    --util-5:         #d6d0f8;
+    --sev-watch:      #5a49b5;
+    --sev-serious:    #8f80de;
+    --sev-critical:   #d6d0f8;
+    --asr-1:          #5a49b5;
+    --asr-2:          #8f80de;
+    --asr-3:          #d6d0f8;
     --success-text:   #0ca30c;
     --shadow-1: 0 1px 2px rgba(0, 0, 0, .4);
     --shadow-2: 0 2px 6px rgba(0, 0, 0, .45), 0 10px 24px -10px rgba(0, 0, 0, .6);
@@ -145,21 +177,22 @@
   --series-1:       #3987e5;
   --series-2:       #d95926;
   --de-emphasis:    #898781;
-  --ord-1:          #184f95;
-  --ord-2:          #2a78d6;
-  --ord-3:          #6da7ec;
-  --ord-4:          #cde2fb;
-  --util-1:         #184f95;
-  --util-2:         #2a78d6;
-  --util-3:         #5598e7;
-  --util-4:         #86b6ef;
-  --util-5:         #cde2fb;
-  --sev-watch:      #184f95;
-  --sev-serious:    #5598e7;
-  --sev-critical:   #cde2fb;
-  --asr-1:          #184f95;
-  --asr-2:          #5598e7;
-  --asr-3:          #cde2fb;
+  --magnitude:      #8f80de;
+  --ord-1:          #5a49b5;
+  --ord-2:          #7461cd;
+  --ord-3:          #8f80de;
+  --ord-4:          #d6d0f8;
+  --util-1:         #5a49b5;
+  --util-2:         #7461cd;
+  --util-3:         #8f80de;
+  --util-4:         #aca2ec;
+  --util-5:         #d6d0f8;
+  --sev-watch:      #5a49b5;
+  --sev-serious:    #8f80de;
+  --sev-critical:   #d6d0f8;
+  --asr-1:          #5a49b5;
+  --asr-2:          #8f80de;
+  --asr-3:          #d6d0f8;
   --success-text:   #0ca30c;
   --shadow-1: 0 1px 2px rgba(0, 0, 0, .4);
   --shadow-2: 0 2px 6px rgba(0, 0, 0, .45), 0 10px 24px -10px rgba(0, 0, 0, .6);
@@ -179,7 +212,7 @@ body {
   background: var(--page);
   color: var(--text-primary);
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  font-size: var(--t-base);
+  font-size: var(--t-sm);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
@@ -203,7 +236,7 @@ p { margin: 0; }
   position: absolute; left: 12px; top: -48px; z-index: 60;
   background: var(--surface-1); color: var(--text-primary);
   border: 1px solid var(--border-strong); border-radius: var(--r-sm);
-  padding: 9px 14px; font-size: var(--t-sm); font-weight: 600; text-decoration: none;
+  padding: 9px 14px; font-size: var(--t-xs); font-weight: 600; text-decoration: none;
   transition: top .16s var(--ease);
 }
 .skip:focus { top: 12px; }
@@ -217,11 +250,11 @@ p { margin: 0; }
   display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-start;
 }
 .masthead-titles { flex: 1 1 440px; min-width: 0; }
-.masthead h1 { font-size: var(--t-xl); letter-spacing: -0.02em; }
-.masthead .sub { color: var(--text-secondary); margin-top: 4px; font-size: var(--t-md); }
+.masthead h1 { font-size: var(--t-lg); letter-spacing: -0.02em; }
+.masthead .sub { color: var(--text-secondary); margin-top: 4px; font-size: var(--t-sm); }
 .masthead-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 3px; }
 .asof {
-  font-size: var(--t-sm); color: var(--text-secondary);
+  font-size: var(--t-xs); color: var(--text-secondary);
   border: 1px solid var(--border); border-radius: var(--r-pill); padding: 5px 12px;
   background: var(--surface-2); white-space: nowrap; font-variant-numeric: tabular-nums;
 }
@@ -229,7 +262,7 @@ p { margin: 0; }
 .synthetic {
   margin: 18px 0 0; padding: 11px 15px; border-radius: var(--r-md);
   background: var(--surface-2); border: 1px solid var(--border);
-  font-size: var(--t-sm); color: var(--text-secondary);
+  font-size: var(--t-xs); color: var(--text-secondary);
   display: flex; gap: 10px; align-items: baseline;
   border-left: 3px solid var(--status-warning);
 }
@@ -258,7 +291,7 @@ p { margin: 0; }
 .tabs { display: flex; gap: 0 2px; flex-wrap: wrap; min-width: 0; }
 .tab {
   appearance: none; background: none; border: 0;
-  font: inherit; font-size: var(--t-md); font-weight: 500;
+  font: inherit; font-size: var(--t-sm); font-weight: 500;
   color: var(--text-secondary); cursor: pointer;
   padding: 15px 2px 13px; margin: 0 12px; position: relative;
   transition: color .14s var(--ease);
@@ -279,7 +312,7 @@ p { margin: 0; }
 .field { display: inline-flex; align-items: center; gap: 6px; }
 .field > span { font-size: var(--t-2xs); color: var(--text-muted); letter-spacing: .02em; text-transform: uppercase; }
 .field select, .qact select {
-  font: inherit; font-size: var(--t-sm); color: var(--text-primary);
+  font: inherit; font-size: var(--t-xs); color: var(--text-primary);
   background: var(--surface-1); border: 1px solid var(--border-strong);
   border-radius: var(--r-sm); padding: 6px 9px; cursor: pointer;
   transition: border-color .14s var(--ease), background .14s var(--ease);
@@ -287,13 +320,13 @@ p { margin: 0; }
 .field select { min-width: 140px; }
 .field select:hover, .qact select:hover { border-color: var(--series-1); }
 .filter-note {
-  font-size: var(--t-sm); color: var(--text-muted); flex: 1 1 100%;
+  font-size: var(--t-xs); color: var(--text-muted); flex: 1 1 100%;
   text-align: right; font-variant-numeric: tabular-nums; padding-bottom: 8px;
 }
 @media (max-width: 1080px) { .filter-note { text-align: left; } }
 
 .btn {
-  appearance: none; font: inherit; font-size: var(--t-sm); font-weight: 500; cursor: pointer;
+  appearance: none; font: inherit; font-size: var(--t-xs); font-weight: 500; cursor: pointer;
   background: var(--surface-1); color: var(--text-secondary);
   border: 1px solid var(--border-strong); border-radius: var(--r-sm); padding: 6px 12px;
   transition: background .14s var(--ease), color .14s var(--ease), border-color .14s var(--ease);
@@ -307,7 +340,7 @@ p { margin: 0; }
    ========================================================================== */
 .card {
   background: var(--surface-1); border: 1px solid var(--border);
-  border-radius: var(--r-lg); padding: 20px 22px 18px; box-shadow: var(--shadow-1);
+  border-radius: var(--r-lg); padding: var(--card-pad); box-shadow: var(--shadow-1);
 }
 .fig { transition: box-shadow .18s var(--ease), border-color .18s var(--ease); }
 .fig:hover { box-shadow: var(--shadow-2); border-color: var(--border-strong); }
@@ -317,8 +350,8 @@ p { margin: 0; }
   font-size: var(--t-2xs); font-weight: 600; letter-spacing: .08em;
   text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px;
 }
-.section-head h2 { font-size: var(--t-lg); }
-.section-head p { font-size: var(--t-sm); color: var(--text-secondary); margin-top: 5px; max-width: 82ch; }
+.section-head h2 { font-size: var(--t-md); }
+.section-head p { font-size: var(--t-xs); color: var(--text-secondary); margin-top: 5px; max-width: 82ch; }
 .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
 @media (max-width: 980px) { .grid-2 { grid-template-columns: minmax(0, 1fr); } }
 
@@ -326,8 +359,8 @@ p { margin: 0; }
    HERO & KPI TILES
    ========================================================================== */
 .hero {
-  display: flex; flex-wrap: wrap; gap: 20px 48px; align-items: flex-start;
-  margin-top: 24px; padding: 24px 26px 20px;
+  display: flex; flex-wrap: wrap; gap: var(--sp-5) var(--sp-8); align-items: flex-start;
+  margin-top: var(--sp-6); padding: var(--card-pad);
 }
 /* 0 1 auto, not 0 0 auto: the foot line is long, and an unshrinkable flex item
    takes its max-content width as a floor, which pushed a phone into
@@ -337,17 +370,21 @@ p { margin: 0; }
   font-size: var(--t-2xs); font-weight: 600; letter-spacing: .08em;
   text-transform: uppercase; color: var(--text-muted);
 }
+/* Tabular figures on every large number. This container resolves system-ui to
+   DejaVu Sans, whose digits are already tabular, so the omission was invisible
+   here — on macOS (SF Pro) and Windows (Segoe UI) the defaults are
+   proportional, and a 54px hero jogs sideways as the count changes under a
+   filter. Twelve smaller classes on this page already set it. */
 .hero-figure .value {
   font-size: var(--t-hero); line-height: 1.02; font-weight: 600;
-  letter-spacing: -0.035em; margin-top: 6px;
-}
-.hero-figure .foot { font-size: var(--t-sm); color: var(--text-muted); margin-top: 6px; max-width: 46ch; }
+  letter-spacing: -0.035em; margin-top: 6px; font-variant-numeric: tabular-nums; }
+.hero-figure .foot { font-size: var(--t-xs); color: var(--text-muted); margin-top: 6px; max-width: 46ch; }
 .hero-split { flex: 1 1 320px; display: flex; flex-wrap: wrap; gap: 14px 32px; align-self: center; }
 .hero-split .cell { min-width: 104px; }
-.hero-split .cell .n { font-size: var(--t-2xl); font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; }
+.hero-split .cell .n { font-size: var(--t-xl); font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .hero-split .cell .k { margin-top: 4px; }
 .hero-note {
-  flex: 1 1 100%; font-size: var(--t-sm); color: var(--text-secondary);
+  flex: 1 1 100%; font-size: var(--t-xs); color: var(--text-secondary);
   border-top: 1px solid var(--grid); padding-top: 14px; margin-top: 4px;
   font-variant-numeric: tabular-nums;
 }
@@ -356,9 +393,9 @@ p { margin: 0; }
 .kpis-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 @media (max-width: 1080px) { .kpis, .kpis-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 640px)  { .kpis, .kpis-4 { grid-template-columns: minmax(0, 1fr); } }
-.kpi { display: flex; flex-direction: column; padding: 18px 20px 16px; }
-.kpi .k { font-size: var(--t-sm); color: var(--text-secondary); font-weight: 500; }
-.kpi .v { font-size: var(--t-2xl); font-weight: 600; letter-spacing: -0.022em; line-height: 1.2; margin-top: 4px; }
+.kpi { display: flex; flex-direction: column; padding: var(--card-pad); }
+.kpi .k { font-size: var(--t-xs); color: var(--text-secondary); font-weight: 500; }
+.kpi .v { font-size: var(--t-xl); font-weight: 600; letter-spacing: -0.022em; line-height: 1.2; margin-top: 4px; font-variant-numeric: tabular-nums; }
 .kpi .d { font-size: var(--t-xs); color: var(--text-muted); display: flex; align-items: center; gap: 6px; margin-top: 6px; }
 .kpi .d .delta {
   font-weight: 600; font-variant-numeric: tabular-nums;
@@ -375,8 +412,8 @@ p { margin: 0; }
 .fig { display: flex; flex-direction: column; }
 .fig-head { display: flex; gap: 14px; align-items: flex-start; }
 .fig-head .t { flex: 1 1 auto; min-width: 0; }
-.fig-head h3 { font-size: var(--t-md); }
-.fig-head .s { font-size: var(--t-sm); color: var(--text-secondary); margin-top: 3px; }
+.fig-head h3 { font-size: var(--t-sm); }
+.fig-head .s { font-size: var(--t-xs); color: var(--text-secondary); margin-top: 3px; }
 .viewtoggle {
   display: inline-flex; flex: 0 0 auto; padding: 2px; gap: 2px;
   border-radius: var(--r-sm); background: var(--surface-2); border: 1px solid var(--border);
@@ -415,7 +452,7 @@ p { margin: 0; }
 .tablewrap::-webkit-scrollbar { height: 10px; width: 10px; }
 .tablewrap::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: var(--r-pill); }
 .tablewrap::-webkit-scrollbar-track { background: transparent; }
-table.data { border-collapse: separate; border-spacing: 0; width: 100%; font-size: var(--t-sm); }
+table.data { border-collapse: separate; border-spacing: 0; width: 100%; font-size: var(--t-xs); }
 table.data th, table.data td {
   text-align: left; padding: 8px 14px 8px 0; border-bottom: 1px solid var(--grid);
   white-space: nowrap;
@@ -442,7 +479,7 @@ table.data tbody tr:last-child td { border-bottom: 0; }
 .sortbtn[aria-sort-active="true"] { color: var(--text-primary); }
 .rowtoggle {
   appearance: none; background: none; border: 0; font: inherit; cursor: pointer;
-  color: var(--text-primary); padding: 0; text-align: left; font-size: var(--t-sm);
+  color: var(--text-primary); padding: 0; text-align: left; font-size: var(--t-xs);
   font-variant-numeric: tabular-nums; font-weight: 500;
   text-decoration: underline; text-decoration-color: var(--border-strong);
   text-underline-offset: 3px; transition: text-decoration-color .14s var(--ease);
@@ -451,7 +488,7 @@ table.data tbody tr:last-child td { border-bottom: 0; }
 tr.detail > td { padding: 0 0 16px; white-space: normal; }
 .detailbox {
   background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-md);
-  padding: 14px 16px; display: grid; gap: 16px;
+  padding: var(--sp-4); display: grid; gap: var(--sp-4);
   grid-template-columns: repeat(auto-fit, minmax(min(270px, 100%), 1fr));
 }
 .detailbox h4 {
@@ -462,7 +499,11 @@ tr.detail > td { padding: 0 0 16px; white-space: normal; }
 /* A select sizes itself to its longest option, and these options are
    sentences — left alone it set a 330px floor and pushed the page into
    horizontal scroll on a phone. */
-.qact .reason { max-width: 100%; min-width: 0; flex: 1 1 12ch; text-overflow: ellipsis; }
+/* A select sizes itself to its longest option, and these options are
+   sentences — left alone it set a 330px floor and pushed the page into
+   horizontal scroll on a phone. Bounded at both ends: it may shrink, and it
+   may not stretch across the whole row the way a filled flex item wants to. */
+.qact .reason { min-width: 0; flex: 0 1 26ch; max-width: 100%; text-overflow: ellipsis; }
 .clearlog { margin: 0 0 10px; padding: 0; list-style: none; display: grid; gap: 6px; }
 .clearlog li { font-size: var(--t-xs); color: var(--text-secondary); display: flex; gap: 9px; line-height: 1.45; }
 .clearlog li .ref { color: var(--text-muted); flex: 0 0 auto; }
@@ -498,42 +539,110 @@ tr.row-focus > td {
 /* ============================================================================
    ACTION QUEUE
    ========================================================================== */
-.queue { display: flex; flex-direction: column; padding: 6px 22px 16px; }
+.queue { display: flex; flex-direction: column; padding: 0 var(--sp-5) var(--sp-4); }
+/* The queue's own scope bar. It sits with the queue rather than in the page
+   toolbar on purpose: those three filters change which records exist, these
+   change which of your actions you are looking at, and conflating the two is
+   how a reader ends up unable to say what a number counted. */
+.qbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2);
+  margin-top: var(--sp-3);
+}
+.qbar-lab {
+  font-size: var(--t-2xs); letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text-muted); font-weight: 600;
+}
+.qbar select { min-width: 0; max-width: 32ch; }
+.qbar-search {
+  font: inherit; font-size: var(--t-xs); padding: 5px 10px; min-width: 0; flex: 1 1 22ch;
+  background: var(--surface-1); color: var(--text-primary);
+  border: 1px solid var(--border-strong); border-radius: var(--r-sm);
+}
+.qbar-count { font-size: var(--t-xs); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
 .qrow {
-  display: grid; gap: 5px 18px; padding: 15px 2px 15px 14px;
-  grid-template-columns: 108px minmax(0, 1fr) auto;
-  border-top: 1px solid var(--grid); align-items: baseline;
+  border-top: 1px solid var(--grid);
   position: relative; transition: background .12s var(--ease);
 }
 .qrow::before {
-  content: ""; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px;
+  content: ""; position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px;
   border-radius: var(--r-pill); background: var(--grid);
+}
+/* One line, one tab stop. The columns are sized so the two that vary most
+   between rows — what the finding is, and how late it is — get the space, and
+   the rest hold a fixed width so the eye can run down them as a column. */
+.qhead {
+  appearance: none; background: none; border: 0; font: inherit; cursor: pointer;
+  width: 100%; text-align: left; color: var(--text-primary);
+  display: grid; align-items: baseline; gap: var(--sp-3);
+  grid-template-columns: 104px minmax(0, 1fr) auto 132px 108px 14px;
+  padding: var(--sp-2) var(--sp-1) var(--sp-2) var(--sp-3);
+}
+.qhead:hover { background: var(--ghost); }
+.qh-title {
+  font-size: var(--t-xs); font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.qh-val { font-size: var(--t-xs); font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 600; }
+.qh-due {
+  font-size: var(--t-xs); color: var(--text-muted); text-align: right;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.qh-due.overdue { color: var(--status-critical); font-weight: 600; }
+.qh-owner {
+  font-size: var(--t-xs); color: var(--text-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.qh-caret { font-size: var(--t-xs); color: var(--text-muted); text-align: right; }
+.qbody {
+  padding: 0 var(--sp-4) var(--sp-4) calc(104px + var(--sp-3) + var(--sp-3));
+  display: grid; gap: var(--sp-2);
+}
+@media (max-width: 900px) {
+  .qhead { grid-template-columns: 104px minmax(0, 1fr) auto 14px; }
+  .qhead .qh-due, .qhead .qh-owner { display: none; }
+  .qbody { padding-left: var(--sp-3); }
+}
+/* On a phone the value phrase — "124% of line 4 quantity" — cannot shrink and
+   cannot sit beside the title, so the row stacks instead of pushing the page
+   sideways. The severity chip stays on the first line because it is what the
+   eye runs down. */
+@media (max-width: 640px) {
+  .qhead {
+    grid-template-columns: 84px minmax(0, 1fr) 14px;
+    row-gap: var(--sp-1); column-gap: var(--sp-2);
+  }
+  .qhead .qh-val, .qhead .qh-due {
+    grid-column: 2 / 3; text-align: left; white-space: normal;
+  }
+  .qhead .qh-due { display: block; }
+  .qhead .qh-caret { grid-row: 1; grid-column: 3; }
 }
 .qrow.sev-critical::before { background: var(--status-critical); }
 .qrow.sev-serious::before  { background: var(--status-serious); }
 .qrow.sev-watch::before    { background: var(--status-warning); }
 .qrow:hover { background: var(--ghost); }
 .qrow:first-child { border-top: 0; }
-.qrow .qtitle { font-size: var(--t-md); font-weight: 600; }
+.qrow .qtitle { font-size: var(--t-sm); font-weight: 600; }
 .qrow .drill {
   appearance: none; background: none; border: 0; padding: 0; font: inherit;
-  font-size: var(--t-md); font-weight: 600; color: var(--text-primary); cursor: pointer;
+  font-size: var(--t-sm); font-weight: 600; color: var(--text-primary); cursor: pointer;
   text-align: left; text-decoration: underline;
   text-decoration-color: var(--border-strong); text-underline-offset: 3px;
   transition: text-decoration-color .14s var(--ease);
 }
 .qrow .drill:hover { text-decoration-color: var(--series-1); }
-.qrow .qwhy { font-size: var(--t-sm); color: var(--text-secondary); grid-column: 2 / -1; max-width: 92ch; line-height: 1.55; }
+.qrow .qwhy { font-size: var(--t-xs); color: var(--text-secondary); max-width: 88ch; line-height: 1.55; margin: 0; }
 .qrow .qmeta {
-  font-size: var(--t-xs); color: var(--text-muted); grid-column: 2 / -1;
-  display: flex; flex-wrap: wrap; gap: 3px 16px; margin-top: 2px;
+  font-size: var(--t-xs); color: var(--text-muted);
+  display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-4); margin: 0;
 }
 .qrow .qmeta .cite { font-variant-numeric: tabular-nums; }
 .qrow .qmeta .overdue { color: var(--status-critical); font-weight: 600; }
-.qrow .qval { font-size: var(--t-sm); font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+.qrow .qval { font-size: var(--t-xs); font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
 .qrow .qact {
-  grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
-  margin-top: 8px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2);
+  margin: var(--sp-1) 0 0;
 }
 .qrow .qact > .muted { font-size: var(--t-2xs); text-transform: uppercase; letter-spacing: .04em; }
 @media (max-width: 700px) {
@@ -542,15 +651,15 @@ tr.row-focus > td {
   .qrow .qval { text-align: left; }
 }
 .queue-more { margin-top: 16px; padding-top: 4px; }
-.queue-empty { padding: 28px 2px; color: var(--text-secondary); font-size: var(--t-md); }
+.queue-empty { padding: 28px 2px; color: var(--text-secondary); font-size: var(--t-sm); }
 
 /* ============================================================================
    AUDIT READINESS — meters
    ========================================================================== */
-.meters { display: grid; gap: 22px 36px; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); margin-top: 6px; }
+.meters { display: grid; gap: var(--sp-6) var(--sp-7); grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); margin-top: 6px; }
 .meter .top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
-.meter .name { font-size: var(--t-sm); color: var(--text-secondary); font-weight: 500; }
-.meter .pct { font-size: var(--t-lg); font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.meter .name { font-size: var(--t-xs); color: var(--text-secondary); font-weight: 500; }
+.meter .pct { font-size: var(--t-md); font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 /* The unfilled track is a lighter step of the fill's own ramp, so the meter's
    state reads across the whole bar. --surface-2 is the fallback where
    color-mix() is unavailable. */
@@ -606,10 +715,11 @@ tr.row-focus > td {
     --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,.28);
     --border-strong: rgba(11,11,11,.4); --ghost: transparent; --ghost-strong: transparent;
     --series-1: #2a78d6; --series-2: #eb6834; --de-emphasis: #898781;
-    --ord-1: #86b6ef; --ord-2: #5598e7; --ord-3: #256abf; --ord-4: #0d366b;
-    --util-1: #86b6ef; --util-2: #5598e7; --util-3: #2a78d6; --util-4: #1c5cab; --util-5: #0d366b;
-    --sev-watch: #86b6ef; --sev-serious: #2a78d6; --sev-critical: #0d366b;
-    --asr-1: #86b6ef; --asr-2: #2a78d6; --asr-3: #0d366b;
+    --magnitude: #6a55c4;
+    --ord-1: #a99ee9; --ord-2: #8878da; --ord-3: #6a55c4; --ord-4: #31266f;
+    --util-1: #a99ee9; --util-2: #8878da; --util-3: #6a55c4; --util-4: #4a3aa7; --util-5: #31266f;
+    --sev-watch: #a99ee9; --sev-serious: #6a55c4; --sev-critical: #31266f;
+    --asr-1: #a99ee9; --asr-2: #6a55c4; --asr-3: #31266f;
     --success-text: #006300; --shadow-1: none; --shadow-2: none;
   }
   @page { margin: 14mm; }
@@ -620,7 +730,8 @@ tr.row-focus > td {
 
   /* Controls do nothing on paper. */
   #theme-toggle, .tabs, .filters, .toolbar, .viewtoggle, .queue-more button,
-  .qrow .qact, .sortbtn .arrow, .skip, #tip { display: none !important; }
+  .qrow .qact, .qbar select, .qbar-search, .qbar .btn, .qbar-lab,
+  .sortbtn .arrow, .skip, #tip { display: none !important; }
   .printonly { display: block; font-size: 9.5pt; color: var(--text-secondary); margin-top: 12px; }
 
   /* Never split a record across a page. */
@@ -635,7 +746,15 @@ tr.row-focus > td {
   .fig:hover { box-shadow: none; }
   .grid-2 { display: block; }
   .grid-2 > .card { margin-bottom: 12px; }
-  .kpis, .kpis-4 { grid-template-columns: repeat(3, 1fr); }
+  /* `1fr` floors at min-content, and the sparkline SVG carries a hard pixel
+     width measured from screen layout — so three tracks demanded far more than
+     the ~688px an A4 page offers at these margins, and the third tile was cut
+     off the sheet. The screen rule two hundred lines up already uses
+     minmax(0, 1fr) for exactly this reason; print did not. Two tracks, each
+     allowed to shrink below its content, and the sparkline made fluid against
+     its own viewBox so it scales rather than forcing the track open. */
+  .kpis, .kpis-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpi svg, .hero svg { width: 100%; height: auto; }
   a[href]::after { content: ""; }
 }
 </style>
@@ -1726,8 +1845,18 @@ function measures(slice, at) {
   const valued = live.filter((a) => a.valueBearing);
   const authorized = sum(valued.map((a) => a.authorizedValueUsd));
   const shipped = sum(valued.map((a) => shippedBy(a, at)));
+  /* Over-ceiling is a headline measure, not just a queue rule: it is the only
+     figure on the page that names a completed movement rather than a state of
+     the paperwork, and it had no home above the fold. */
+  const over = live.map((a) => ({ a, lines: overShippedLines(a, at) })).filter((x) => x.lines.length);
   return {
     liveCount: live.length,
+    overCeilingCount: over.length,
+    overCeilingValue: sum(over.map((x) => sum(x.lines.map((c) => c.valueUsd)))),
+    overThresholdCount: valued.filter((a) => {
+      const u = utilization(a, at);
+      return u !== null && u > POLICY.UTILIZATION_THRESHOLD;
+    }).length,
     expiringCount: soon.length,
     expiringWithRenewal: soon.filter((a) => filedRenewals.has(a.id)).length,
     expiringAtRiskValue: sum(soon.filter((a) => a.valueBearing)
@@ -2693,7 +2822,7 @@ function figure(spec) {
 /* Note on the options object: never name a destructured option `valueOf`,
    `toString` or `constructor`. Destructuring reads through the prototype
    chain, so the default would silently lose to Object.prototype's version. */
-function barsH(w, { rows, band = 30, bar = 16, maxValue = null, display = (r) => fmtInt(r.value), colorOf = () => 'var(--series-1)', threshold = null, thresholdLabel = '', tipTitle = (r) => r.label, tipRows = null, labelMax = 210 }) {
+function barsH(w, { rows, band = 30, bar = 16, maxValue = null, display = (r) => fmtInt(r.value), colorOf = () => 'var(--magnitude)', threshold = null, thresholdLabel = '', tipTitle = (r) => r.label, tipRows = null, labelMax = 210 }) {
   const labelW = Math.min(labelMax, Math.max(...rows.map((r) => textWidth(r.label, 11.5, 500))) + 14);
   const valueW = Math.max(...rows.map((r) => textWidth(display(r), 11.5, 600))) + 14;
   const x0 = labelW;
@@ -2940,10 +3069,22 @@ function stackedRow(w, { segments, height = 30, gap = 2, totalLabel = '' }) {
 /* ---------------------------------------------------------------------------
    Sparkline — de-emphasis hue with the current period in the accent.
    ------------------------------------------------------------------------- */
-function sparkline(w, values, { height = 34, accent = 'var(--series-1)' } = {}) {
+/* `minSpan` anchors the vertical scale so amplitude means something. Left to
+   autoscale against its own min and max, a sparkline draws every series at
+   full height whatever it did: value utilization moved 0.7 points across the
+   year and drew the same hump as classification coverage falling 6.5. Mark
+   amplitude uncorrelated with the magnitude it depicts is the one thing a
+   sparkline must not do, so percentage measures are given a floor on their
+   domain and a flat year is allowed to look flat. */
+function sparkline(w, values, { height = 34, accent = 'var(--series-1)', minSpan = 0 } = {}) {
   const clean = values.map((v) => (v === null || Number.isNaN(v) ? null : v));
   const nums = clean.filter((v) => v !== null);
-  const lo = Math.min(...nums), hi = Math.max(...nums);
+  let lo = Math.min(...nums), hi = Math.max(...nums);
+  if (minSpan > 0 && hi - lo < minSpan) {
+    const mid = (hi + lo) / 2;
+    lo = mid - minSpan / 2;
+    hi = mid + minSpan / 2;
+  }
   const span = hi - lo || 1;
   const pad = 5;
   const xOf = (i) => (i / Math.max(1, clean.length - 1)) * (w - 8) + 4;
@@ -2971,7 +3112,24 @@ function sparkline(w, values, { height = 34, accent = 'var(--series-1)' } = {}) 
    tile, chart, queue row and table from the same slice, so the numbers on the
    page always agree with each other.
    ========================================================================== */
-const STATE = { view: 'posture', program: 'all', site: 'all', regime: 'all', queueExpanded: false, focus: null };
+const STATE = {
+  view: 'posture', program: 'all', site: 'all', regime: 'all',
+  queueExpanded: false, focus: null,
+  /* Scoping that belongs to the queue rather than to the record set. The three
+     filters above the page answer "which records", which is a different
+     question from "which of my actions" — and without these the only way to
+     see one analyst's load, or one rule's matches, was to scroll 274 rows. */
+  qSeverity: 'all', qOwner: 'all', qRule: 'all', qSearch: '',
+};
+
+const queueScoped = (items) => items.filter((it) =>
+  (STATE.qSeverity === 'all' || it.severity === STATE.qSeverity)
+  && (STATE.qOwner === 'all' || it.owner === STATE.qOwner)
+  && (STATE.qRule === 'all' || it.ruleKey === STATE.qRule)
+  && (!STATE.qSearch || `${it.title} ${it.subject} ${it.ruleName}`.toLowerCase().includes(STATE.qSearch.toLowerCase())));
+
+const queueScopeActive = () => STATE.qSeverity !== 'all' || STATE.qOwner !== 'all'
+  || STATE.qRule !== 'all' || STATE.qSearch !== '';
 
 /* Assignment and clearing are held in this browser session only — there is no
    back end to write to, and pretending otherwise would be the one dishonest
@@ -2986,7 +3144,7 @@ const CLEAR_REASONS = [
   'Deferred — awaiting a third party',
   'Referred to trade counsel',
 ];
-const WORKFLOW = { cleared: new Map(), reassigned: new Map() };
+const WORKFLOW = { cleared: new Map(), reassigned: new Map(), draftReason: new Map(), expandedActions: new Set() };
 const ANALYST_ROSTER = [...new Set([
   ...DATA.authorizations.map((a) => a.analyst),
   ...DATA.classifications.map((p) => p.analyst),
@@ -3033,7 +3191,13 @@ function inkOn(varName) {
   const lin = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => {
     v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
   });
-  return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2] > 0.42 ? '#0b0b0b' : '#ffffff';
+  /* 0.19, not the 0.42 this used to carry. The crossover is the luminance at
+     which white ink and #0b0b0b ink contrast EQUALLY against the fill, and it
+     solves exactly: (1.05)/(L+0.05) = (L+0.05)/(0.0056+0.05) → L ≈ 0.1916.
+     Picking 0.42 meant every fill between the two thresholds — the middle of
+     every ramp on the page — took white ink at 2.5–3.0:1 and failed 1.4.3 for
+     an 11px label. Above the crossover dark ink always wins; below it, white. */
+  return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2] > 0.1916 ? '#0b0b0b' : '#ffffff';
 }
 
 function chip(severity, extra, label) {
@@ -3064,7 +3228,14 @@ function renderPosture(host, slice) {
     html('p', { class: 'value', text: fmtInt(queue.total) }),
     html('p', {
       class: 'foot',
-      text: `${RULES.length} rules evaluated against ${fmtInt(slice.authorizations.length)} authorizations and ${fmtInt(slice.classifications.length)} parts`,
+      /* Process controls are business-wide SOP steps, not program records, so
+         they stay in scope when the record filters empty out. Left unsaid, a
+         filtered view read "6 open compliance actions · 17 rules evaluated
+         against 0 authorizations and 0 parts" — a count contradicting its own
+         denominator in the same breath. Say which population is left. */
+      text: (slice.authorizations.length === 0 && slice.classifications.length === 0)
+        ? `${RULES.length} rules evaluated. No authorizations or parts are in this selection — any action shown is a process-compliance finding, tested across the business rather than per program.`
+        : `${RULES.length} rules evaluated against ${fmtInt(slice.authorizations.length)} authorizations, ${fmtInt(slice.classifications.length)} parts and ${fmtInt((slice.controls || []).length)} controls`,
     }),
   ]));
   const split = html('div', { class: 'hero-split' });
@@ -3090,9 +3261,15 @@ function renderPosture(host, slice) {
   /* ---- Six KPI tiles, each carrying its own 12-month trend ---- */
   const tiles = [
     {
-      label: 'Live authorizations', value: fmtInt(now.liveCount),
-      note: `${fmtUsd(now.authorizedValue)} of authorized value on live authorizations`,
-      series: hist.map((h) => h.liveCount), dir: 'neutral',
+      /* This slot used to carry the live authorization count — portfolio size,
+         which is the denominator of half the other tiles and actionable by
+         nobody. It now carries the thing with no home anywhere above the fold:
+         value that moved past a ceiling the authorization set. */
+      label: 'Shipped past a ceiling', value: fmtInt(now.overCeilingCount),
+      note: now.overCeilingCount === 0
+        ? `No live authorization is over its authorized value or quantity · ${fmtInt(now.liveCount)} live, ${fmtUsd(now.authorizedValue)} authorized`
+        : `${fmtUsd(now.overCeilingValue)} moved on the lines that are over · ${fmtInt(now.liveCount)} live authorizations in scope`,
+      series: hist.map((h) => h.overCeilingCount), dir: 'down',
       delta: (a, b) => `${b - a >= 0 ? '+' : '−'}${fmtInt(Math.abs(b - a))}`, fmt: fmtInt,
     },
     {
@@ -3103,10 +3280,16 @@ function renderPosture(host, slice) {
       delta: (a, b) => `${b - a >= 0 ? '+' : '−'}${fmtInt(Math.abs(b - a))}`, fmt: fmtInt,
     },
     {
+      /* A mean over a distribution the utilization histogram shows to be
+         bimodal — most authorizations barely drawn, a cluster near exhausted,
+         and almost nothing at the average. The headline stays because it is
+         the portfolio draw-down rate, but the note now carries the tail, which
+         is the part anyone acts on. */
       label: 'Value utilization', value: now.utilization === null ? '—' : fmtPct(now.utilization),
-      note: `Amendment threshold at ${fmtPct(POLICY.UTILIZATION_THRESHOLD)} of authorized value`,
+      note: `${fmtInt(now.overThresholdCount)} live authorizations are past the ${fmtPct(POLICY.UTILIZATION_THRESHOLD)} amendment threshold`,
       series: hist.map((h) => (h.utilization === null ? null : h.utilization * 100)), dir: 'neutral',
       delta: (a, b) => `${b - a >= 0 ? '+' : '−'}${Math.abs(b - a).toFixed(1)} pts`, fmt: (v) => `${v.toFixed(0)}%`, sig: 0.05,
+      minSpan: 10,
     },
     {
       label: 'Open provisos', value: fmtInt(now.openProvisoCount),
@@ -3120,6 +3303,7 @@ function renderPosture(host, slice) {
         : `${fmtInt(now.undeterminedCount)} of ${fmtInt(now.partCount)} parts have no determination of record`,
       series: hist.map((h) => (h.coverage === null ? null : h.coverage * 100)), dir: 'up',
       delta: (a, b) => `${b - a >= 0 ? '+' : '−'}${Math.abs(b - a).toFixed(1)} pts`, fmt: (v) => `${v.toFixed(1)}%`, sig: 0.05,
+      minSpan: 10,
     },
     {
       label: 'Licensing turnaround', value: now.turnaround === null ? '—' : `${fmtInt(now.turnaround)} days`,
@@ -3157,7 +3341,7 @@ function renderPosture(host, slice) {
     const drawSpark = () => {
       const w = Math.max(120, sparkHost.clientWidth || 200);
       sparkHost.textContent = '';
-      sparkHost.appendChild(sparkline(w, t.series));
+      sparkHost.appendChild(sparkline(w, t.series, { minSpan: t.minSpan || 0 }));
       const readable = t.series.map((v, i) => `${monthLabels[i]}: ${v === null ? 'no data' : t.fmt(v)}`).join('; ');
       sparkHost.setAttribute('aria-label', `${t.label}, 12-month trend — ${readable}`);
       sparkHost.setAttribute('role', 'img');
@@ -3171,109 +3355,274 @@ function renderPosture(host, slice) {
   /* ---- Needs attention ---- */
   host.appendChild(html('div', { class: 'section-head' }, [
     html('p', { class: 'eyebrow', text: 'Action queue' }),
-    html('h2', { text: 'Needs attention' }),
+    /* Focus lands here when the control that had it no longer exists — after
+       clearing an action, the row and its buttons are gone. Landing on the
+       heading re-announces the section and the updated count instead of
+       stranding a keyboard user at the top of the document. */
+    html('h2', { text: 'Needs attention', tabindex: '-1', 'data-fk': 'queue-heading' }),
     html('p', {
       text: 'Every row is a rule evaluated against the record set, with the reason it matters stated in full, the analyst who owns it, and the date it fell due. Severity orders the queue; within a tier the rule kinds are dealt out round-robin, and within a rule the soonest due comes first. Reassigning an owner or clearing an action is held in this browser session only — there is no system of record behind this page to write to.',
     }),
   ]));
 
+  /* The rule index sits above the records it indexes. It was underneath all
+     274 of them, which is the wrong way round for a cockpit: a reader wants
+     what is firing, then how much, then which records — not every record and
+     then a summary of what they were. It is also the fastest route into a
+     scoped queue, now that its rows are buttons. */
+  const ruleCard = html('section', { class: 'card', style: 'margin-top:16px' });
+  ruleCard.appendChild(html('h3', { style: 'font-size:var(--t-sm)', text: 'Rules evaluated' }));
+  const rt = html('table', { class: 'data' });
+  rt.appendChild(html('caption', { class: 'sr-only', text: 'Rules evaluated' }));
+  rt.appendChild(html('thead', {}, [html('tr', {}, [
+    html('th', { text: 'Severity', scope: 'col' }),
+    html('th', { text: 'Rule', scope: 'col' }),
+    html('th', { class: 'num', text: 'Matches', scope: 'col' }),
+  ])]));
+  const rtb = html('tbody');
+  for (const r of RULES) {
+    const n = queue.counts.get(r.key);
+    /* This table shows exactly the counts a head of function would want to act
+       on, and it used to be inert — 17 rows of numbers under 274 records, with
+       no way to get from "27 corrective actions are overdue" to those 27. Each
+       row now scopes the queue to its rule. */
+    const on = STATE.qRule === r.key;
+    rtb.appendChild(html('tr', { class: on ? 'row-focus' : '' }, [
+      html('td', {}, [chip(r.severity)]),
+      html('td', { style: 'white-space:normal' }, [
+        n > 0 ? html('button', {
+          class: 'drill', type: 'button', text: r.name,
+          'data-fk': `rule:${r.key}`,
+          'aria-pressed': String(on),
+          title: on ? 'Show the whole queue again' : `Show only the ${n} open ${n === 1 ? 'action' : 'actions'} from this rule`,
+          onclick: () => {
+            STATE.qRule = on ? 'all' : r.key;
+            STATE.queueExpanded = false;
+            render();
+            const h = document.querySelector('[data-fk="queue-heading"]');
+            if (h) { h.focus({ preventScroll: true }); h.scrollIntoView({ block: 'start' }); }
+          },
+        }) : html('span', { text: r.name }),
+      ]),
+      html('td', { class: 'num', text: fmtInt(n) }),
+    ]));
+  }
+  rt.appendChild(rtb);
+  /* Wide content scrolls inside its own container — never the page. */
+  ruleCard.appendChild(html('div', { class: 'tablewrap' }, [rt]));
+  host.appendChild(ruleCard);
+
+  /* Scoping the queue itself. The filters at the top of the page answer "which
+     records"; these answer "which of my actions", and they are a different
+     question — the one a head of function actually opens the page with. */
+  const scoped = queueScoped(queue.items);
+  const qbar = html('div', { class: 'qbar' });
+  const scopeSelect = (label, key, options, current) => {
+    const id = `q-${key}`;
+    qbar.appendChild(html('label', { class: 'qbar-lab', for: id, text: label }));
+    const sel = html('select', { id, 'data-fk': `qfilter:${key}` });
+    for (const [value, text] of options) {
+      const opt = html('option', { value, text });
+      if (value === current) opt.selected = true;
+      sel.appendChild(opt);
+    }
+    sel.addEventListener('change', (e) => {
+      STATE[key] = e.target.value;
+      STATE.queueExpanded = false;
+      render();
+    });
+    qbar.appendChild(sel);
+  };
+  scopeSelect('Severity', 'qSeverity',
+    [['all', `All severities (${fmtInt(queue.items.length)})`],
+      ...SEVERITY_ORDER.map((sv) => [sv, `${SEVERITY_META[sv].label} (${fmtInt(queue.bySeverity[sv])})`])],
+    STATE.qSeverity);
+  scopeSelect('Owner', 'qOwner',
+    [['all', 'All owners'], ...queue.byOwner.map((o) => [o.owner, `${o.owner} (${fmtInt(o.total)})`])],
+    STATE.qOwner);
+  scopeSelect('Rule', 'qRule',
+    [['all', 'All rules'], ...RULES.filter((r) => queue.counts.get(r.key) > 0)
+      .map((r) => [r.key, `${r.name} (${fmtInt(queue.counts.get(r.key))})`])],
+    STATE.qRule);
+  const search = html('input', {
+    type: 'search', id: 'q-search', class: 'qbar-search', 'data-fk': 'qfilter:qSearch',
+    placeholder: 'Find an authorization or part…', 'aria-label': 'Search the action queue',
+    value: STATE.qSearch,
+  });
+  search.addEventListener('input', (e) => {
+    STATE.qSearch = e.target.value;
+    STATE.queueExpanded = false;
+    render();
+  });
+  qbar.appendChild(search);
+  if (queueScopeActive()) {
+    qbar.appendChild(html('button', {
+      class: 'btn btn-sm', type: 'button', text: 'Clear queue filters', 'data-fk': 'qfilter:reset',
+      onclick: () => {
+        STATE.qSeverity = STATE.qOwner = STATE.qRule = 'all';
+        STATE.qSearch = '';
+        STATE.queueExpanded = false;
+        render();
+      },
+    }));
+    qbar.appendChild(html('span', {
+      class: 'qbar-count',
+      text: `${fmtInt(scoped.length)} of ${fmtInt(queue.items.length)} open actions`,
+    }));
+  }
+  host.appendChild(qbar);
+
   const queueCard = html('section', { class: 'card queue' });
-  if (!queue.items.length) {
-    queueCard.appendChild(html('p', { class: 'queue-empty', text: 'No rule matched the current selection. Widen the filters to see the full picture.' }));
+  if (!scoped.length) {
+    queueCard.appendChild(html('p', {
+      class: 'queue-empty',
+      text: queue.items.length
+        ? 'No open action matches the queue filters. Clear them to see the rest.'
+        : 'No rule matched the current selection. Widen the filters to see the full picture.',
+    }));
   } else {
     /* A critical action is never parked behind a "show more". The default view
        runs to the end of the critical tier and a few rows into the next, so the
        reader can also see where the tier boundary falls. */
-    const defaultCount = Math.max(14, queue.bySeverity.critical + 3);
-    const shown = STATE.queueExpanded ? queue.items : queue.items.slice(0, defaultCount);
+    const criticalShown = scoped.filter((i) => i.severity === 'critical').length;
+    const defaultCount = Math.max(14, criticalShown + 3);
+    const shown = STATE.queueExpanded ? scoped : scoped.slice(0, defaultCount);
     for (const it of shown) {
-      const row = html('div', { class: `qrow sev-${it.severity}` });
-      row.appendChild(html('div', {}, [chip(it.severity)]));
-      /* Every rule already knows which view and which record it is about.
-         Wiring that up is the difference between "here is a finding" and
-         "here is the record, open". */
-      row.appendChild(html('p', { class: 'qtitle' }, [
-        html('button', {
-          class: 'drill', type: 'button', text: it.title,
-          title: `Open ${it.subject} in the ${{ auth: 'Authorizations', class: 'Classification', process: 'Process compliance' }[it.view]} detail table`,
-          onclick: () => { STATE.view = it.view; STATE.focus = it.focus; render(); },
-        }),
-      ]));
-      row.appendChild(html('p', { class: 'qval' }, [
-        html('span', { text: it.value }),
-        html('br'),
-        html('span', { class: 'muted', style: 'font-weight:400', text: it.valueLabel }),
-      ]));
-      row.appendChild(html('p', { class: 'qwhy', text: it.why }));
-      const meta = html('p', { class: 'qmeta' });
-      meta.appendChild(html('span', { text: `Open ${fmtDuration(it.openDays)}` }));
-      meta.appendChild(html('span', {
-        class: it.overdueDays > 0 ? 'overdue' : '',
-        text: it.overdueDays > 0
-          ? `Due ${fmtDate(it.dueOn)} — ${fmtDuration(it.overdueDays)} overdue`
-          : `Due ${fmtDate(it.dueOn)}`,
-      }));
-      for (const m of it.meta) if (m) meta.appendChild(html('span', { text: m }));
-      meta.appendChild(html('span', { class: 'cite', text: it.cite }));
-      row.appendChild(meta);
+      const open = WORKFLOW.expandedActions.has(it.actionId);
+      const row = html('div', { class: `qrow sev-${it.severity}${open ? ' open' : ''}` });
 
-      const act = html('p', { class: 'qact' });
-      const sel = html('select', { 'aria-label': `Owner of ${it.subject}` });
-      for (const name of ANALYST_ROSTER) {
-        const opt = html('option', { value: name, text: name });
-        if (name === it.owner) opt.selected = true;
-        sel.appendChild(opt);
-      }
-      sel.addEventListener('change', (e) => {
-        WORKFLOW.reassigned.set(it.actionId, e.target.value);
-        render();
-      });
-      act.appendChild(html('span', { class: 'muted', text: 'Owner' }));
-      act.appendChild(sel);
-      /* Clearing an action used to be an unlogged, unreasoned deletion: the row
-         vanished and nothing recorded that anyone had decided anything. In a
-         compliance tool the disposition is the part worth keeping — an auditor
-         asks why an action was closed far more often than whether it was — so
-         a reason is required before the button does anything, and the decision
-         is written to a session log that is visible on the page. */
-      const why = html('select', { class: 'reason', 'aria-label': `Reason for clearing ${it.subject}` });
-      why.appendChild(html('option', { value: '', text: 'Reason…' }));
-      for (const r of CLEAR_REASONS) why.appendChild(html('option', { value: r, text: r }));
-      act.appendChild(html('span', { class: 'muted', text: 'Disposition' }));
-      act.appendChild(why);
-      const clearBtn = html('button', {
-        class: 'btn btn-sm', type: 'button', text: 'Clear action',
-        'aria-label': `Clear ${it.subject} from the queue`,
-        disabled: true,
+      /* The row was 200px of prose, and nineteen of the criticals carried the
+         same paragraph word for word — the rationale belongs to the rule, not
+         to each record that matched it. At that height nobody could see the
+         shape of their own critical tier without eight screens of scrolling,
+         and the two selects and a button rendered on every row put 74 controls
+         and three tab stops per row into the page before anyone had decided to
+         act on anything. Collapsed, a row is now one line and one tab stop
+         carrying only what distinguishes it; the rationale, the citation and
+         the controls live in the expansion. */
+      const head = html('button', {
+        class: 'qhead', type: 'button',
+        'aria-expanded': String(open),
+        'data-fk': `exp:${it.actionId}`,
         onclick: () => {
-          if (!why.value) return;
-          WORKFLOW.cleared.set(it.actionId, {
-            subject: it.subject, title: it.title, severity: it.severity,
-            reason: why.value, owner: it.owner, at: new Date(),
-          });
+          open ? WORKFLOW.expandedActions.delete(it.actionId) : WORKFLOW.expandedActions.add(it.actionId);
           render();
         },
-      });
-      why.addEventListener('change', () => { clearBtn.disabled = !why.value; });
-      act.appendChild(clearBtn);
-      row.appendChild(act);
+      }, [
+        html('span', { class: 'qh-sev' }, [chip(it.severity)]),
+        html('span', { class: 'qh-title', text: it.title }),
+        html('span', { class: 'qh-val' }, [
+          html('span', { text: it.value }),
+          html('span', { class: 'muted', text: ` ${it.valueLabel}` }),
+        ]),
+        html('span', {
+          class: `qh-due${it.overdueDays > 0 ? ' overdue' : ''}`,
+          text: it.overdueDays > 0 ? `${fmtDuration(it.overdueDays)} overdue` : `due ${fmtDate(it.dueOn)}`,
+        }),
+        html('span', { class: 'qh-owner', text: it.owner }),
+        html('span', { class: 'qh-caret', 'aria-hidden': 'true', text: open ? '\u2212' : '+' }),
+      ]);
+      row.appendChild(head);
+
+      if (open) {
+        const body = html('div', { class: 'qbody' });
+        body.appendChild(html('p', { class: 'qwhy', text: it.why }));
+        const meta = html('p', { class: 'qmeta' });
+        meta.appendChild(html('span', { text: `Open ${fmtDuration(it.openDays)}` }));
+        meta.appendChild(html('span', {
+          class: it.overdueDays > 0 ? 'overdue' : '',
+          text: it.overdueDays > 0
+            ? `Due ${fmtDate(it.dueOn)} — ${fmtDuration(it.overdueDays)} overdue`
+            : `Due ${fmtDate(it.dueOn)}`,
+        }));
+        for (const m of it.meta) if (m) meta.appendChild(html('span', { text: m }));
+        meta.appendChild(html('span', { class: 'cite', text: it.cite }));
+        body.appendChild(meta);
+
+        const act = html('p', { class: 'qact' });
+        /* Every rule already knows which view and which record it is about.
+           Wiring that up is the difference between "here is a finding" and
+           "here is the record, open". */
+        act.appendChild(html('button', {
+          class: 'btn btn-sm', type: 'button', text: 'Open record',
+          'data-fk': `drill:${it.actionId}`,
+          title: `Open ${it.subject} in the ${{ auth: 'Authorizations', class: 'Classification', process: 'Process compliance' }[it.view]} detail table`,
+          onclick: () => { STATE.view = it.view; STATE.focus = it.focus; STATE.returnTo = 'posture'; render(); },
+        }));
+        const sel = html('select', { 'aria-label': `Owner of ${it.subject}`, 'data-fk': `owner:${it.actionId}` });
+        for (const name of ANALYST_ROSTER) {
+          const opt = html('option', { value: name, text: name });
+          if (name === it.owner) opt.selected = true;
+          sel.appendChild(opt);
+        }
+        sel.addEventListener('change', (e) => {
+          WORKFLOW.reassigned.set(it.actionId, e.target.value);
+          render();
+        });
+        act.appendChild(html('span', { class: 'muted', text: 'Owner' }));
+        act.appendChild(sel);
+        /* Clearing an action used to be an unlogged, unreasoned deletion: the
+           row vanished and nothing recorded that anyone had decided anything.
+           In a compliance tool the disposition is the part worth keeping — an
+           auditor asks why an action was closed far more often than whether it
+           was — so a reason is required before the button does anything, and
+           the decision is written to a session log visible on the page. */
+        const why = html('select', {
+          class: 'reason', 'aria-label': `Reason for clearing ${it.subject}`,
+          'data-fk': `reason:${it.actionId}`,
+        });
+        why.appendChild(html('option', { value: '', text: 'Reason\u2026' }));
+        for (const r of CLEAR_REASONS) why.appendChild(html('option', { value: r, text: r }));
+        const draft = WORKFLOW.draftReason.get(it.actionId);
+        if (draft) why.value = draft;
+        act.appendChild(html('span', { class: 'muted', text: 'Disposition' }));
+        act.appendChild(why);
+        const clearBtn = html('button', {
+          class: 'btn btn-sm', type: 'button', text: 'Clear action',
+          'aria-label': `Clear ${it.subject} from the queue`,
+          'data-fk': `clear:${it.actionId}`,
+          onclick: () => {
+            if (!why.value) return;
+            WORKFLOW.cleared.set(it.actionId, {
+              subject: it.subject, title: it.title, severity: it.severity,
+              reason: why.value, owner: it.owner, at: new Date(),
+            });
+            WORKFLOW.draftReason.delete(it.actionId);
+            WORKFLOW.expandedActions.delete(it.actionId);
+            render();
+          },
+        });
+        /* Set as a PROPERTY, never as an attribute. `disabled: false` in the
+           attribute bag renders disabled="false", and HTML treats the presence
+           of the attribute as disablement whatever its value — so the button
+           was dead exactly when a disposition had been chosen. */
+        clearBtn.disabled = !draft;
+        why.addEventListener('change', () => {
+          if (why.value) WORKFLOW.draftReason.set(it.actionId, why.value);
+          else WORKFLOW.draftReason.delete(it.actionId);
+          clearBtn.disabled = !why.value;
+        });
+        act.appendChild(clearBtn);
+        body.appendChild(act);
+        row.appendChild(body);
+      }
       queueCard.appendChild(row);
     }
-    if (queue.items.length > defaultCount) {
+    if (scoped.length > defaultCount) {
       const below = SEVERITY_ORDER
-        .map((sv) => ({ sv, n: queue.items.slice(defaultCount).filter((i) => i.severity === sv).length }))
+        .map((sv) => ({ sv, n: scoped.slice(defaultCount).filter((i) => i.severity === sv).length }))
         .filter((x) => x.n > 0);
       queueCard.appendChild(html('div', { class: 'queue-more' }, [
         /* Say what the fold is hiding rather than only how much. */
         html('p', {
           class: 'muted', style: 'font-size:12px; margin-bottom:8px',
           text: STATE.queueExpanded
-            ? `All ${fmtInt(queue.items.length)} open actions shown, highest severity first.`
+            ? `All ${fmtInt(scoped.length)} open actions shown, highest severity first.`
             : `Below the fold: ${below.map((x) => `${fmtInt(x.n)} ${SEVERITY_META[x.sv].label.toLowerCase()}`).join(', ')}.`,
         }),
         html('button', {
           class: 'btn', type: 'button',
-          text: STATE.queueExpanded ? `Show the first ${fmtInt(defaultCount)} of ${fmtInt(queue.items.length)}` : `Show all ${fmtInt(queue.items.length)} open actions`,
+          text: STATE.queueExpanded ? `Show the first ${fmtInt(defaultCount)} of ${fmtInt(scoped.length)}` : `Show all ${fmtInt(scoped.length)} open actions`,
           onclick: () => { STATE.queueExpanded = !STATE.queueExpanded; render(); },
         }),
       ]));
@@ -3345,27 +3694,6 @@ function renderPosture(host, slice) {
   }));
 
   /* ---- Rule coverage ---- */
-  const ruleCard = html('section', { class: 'card', style: 'margin-top:16px' });
-  ruleCard.appendChild(html('h3', { style: 'font-size:var(--t-md)', text: 'Rules evaluated' }));
-  const rt = html('table', { class: 'data' });
-  rt.appendChild(html('caption', { class: 'sr-only', text: 'Rules evaluated' }));
-  rt.appendChild(html('thead', {}, [html('tr', {}, [
-    html('th', { text: 'Severity', scope: 'col' }),
-    html('th', { text: 'Rule', scope: 'col' }),
-    html('th', { class: 'num', text: 'Matches', scope: 'col' }),
-  ])]));
-  const rtb = html('tbody');
-  for (const r of RULES) {
-    rtb.appendChild(html('tr', {}, [
-      html('td', {}, [chip(r.severity)]),
-      html('td', { style: 'white-space:normal', text: r.name }),
-      html('td', { class: 'num', text: fmtInt(queue.counts.get(r.key)) }),
-    ]));
-  }
-  rt.appendChild(rtb);
-  /* Wide content scrolls inside its own container — never the page. */
-  ruleCard.appendChild(html('div', { class: 'tablewrap' }, [rt]));
-  host.appendChild(ruleCard);
 
   /* ---- Audit readiness ---- */
   host.appendChild(html('div', { class: 'section-head' }, [
@@ -3378,10 +3706,17 @@ function renderPosture(host, slice) {
   const meterCard = html('section', { class: 'card' });
   const meters = html('div', { class: 'meters' });
   for (const r of auditReadiness(slice, AS_OF)) {
-    const fill = `var(--status-${r.status})`;
+    /* One hue for every meter, and the state lives in the chip below with its
+       icon and label. Painting the bar itself in status colour made it do two
+       jobs at once and did both badly: a meter is a magnitude, so colour was
+       encoding nothing the length was not already saying, and 94.9% vs 95.1%
+       repainted the whole row amber or green off a 0.2-point difference. It
+       also put --status-warning, which measures 1.83:1 on white, in as a
+       data mark — a bar nobody with low vision could find the end of. */
+    const fill = 'var(--ord-3)';
     meters.appendChild(html('div', {
       class: 'meter',
-      style: `--meter-fill:${fill}; --meter-track:color-mix(in oklab, ${fill} 20%, var(--surface-1));`,
+      style: `--meter-fill:${fill}; --meter-track:color-mix(in oklab, ${fill} 22%, var(--surface-1));`,
     }, [
       html('div', { class: 'top' }, [
         html('span', { class: 'name', text: r.name }),
@@ -3532,7 +3867,7 @@ function renderAuthorizations(host, slice) {
       display: (r) => fmtUsd(r.value),
       tipTitle: (r) => r.label,
       tipRows: (r) => [
-        { value: fmtUsdFull(r.value), name: 'authorized', color: 'var(--series-1)' },
+        { value: fmtUsdFull(r.value), name: 'authorized', color: 'var(--magnitude)' },
         { value: fmtUsdFull(r.shipped), name: 'shipped to date' },
         { value: fmtInt(r.n), name: 'live authorizations' },
       ],
@@ -3758,7 +4093,7 @@ function renderClassification(host, slice) {
       display: (r) => fmtInt(r.value),
       tipTitle: (r) => r.label,
       tipRows: (r) => [
-        { value: fmtInt(r.value), name: 'parts', color: 'var(--series-1)' },
+        { value: fmtInt(r.value), name: 'parts', color: 'var(--magnitude)' },
         { value: fmtPct(r.value / mixTotal, 1), name: 'of the item master' },
       ],
     }),
@@ -3788,7 +4123,7 @@ function renderClassification(host, slice) {
       display: (r) => fmtInt(r.value),
       tipTitle: (r) => `${r.label} · ${r.jurisdiction}`,
       tipRows: (r) => [
-        { value: fmtInt(r.value), name: 'parts', color: 'var(--series-1)' },
+        { value: fmtInt(r.value), name: 'parts', color: 'var(--magnitude)' },
         { value: fmtPct(r.value / codedTotal, 1), name: 'of classified parts' },
       ],
     }),
@@ -3896,21 +4231,39 @@ function renderProcess(host, slice) {
   }
   host.appendChild(strip);
 
-  const grid = html('div', { class: 'grid-2' });
+  /* One figure, so no two-column grid: removing the duplicate assurance chart
+     left its partner marooned beside an empty half-width column. A grid with
+     one child is a layout, not a comparison. */
+  const grid = html('div', {});
 
-  /* ---- Conformance by procedure ---- */
-  const sopRows = pc.bySop.map((r) => ({ label: r.sop, value: r.conformance ?? 0, r }));
+  /* ---- Conformance shortfall by procedure ---- */
+  /* Drawn as distance below target, not as the level. On a zero-baselined
+     0–100% axis the four middle procedures differed by 1.5 points — about
+     fourteen pixels of a 939px bar — so they were visually identical and the
+     reader was left reading the digits while the bars did nothing. The
+     question this figure exists to answer is "how far off target is each
+     procedure", and encoding that directly makes the answer the longest bar:
+     a procedure at or above target draws nothing, which is the right amount
+     of ink for something that needs no action. */
+  const TARGET = POLICY.CONFORMANCE_TARGET;
+  const sopRows = pc.bySop.map((r) => ({
+    label: r.sop,
+    value: r.conformance === null ? 0 : Math.max(0, (TARGET - r.conformance) * 100),
+    r,
+  })).sort((a, b) => b.value - a.value);
+  const worstGap = Math.max(1, ...sopRows.map((x) => x.value));
   grid.appendChild(figure({
-    title: 'Conformance by procedure',
-    subtitle: 'Items conforming ÷ items tested, across every control under each SOP. Lowest first.',
-    footnote: `Weighted by what was actually tested, so a procedure carrying an automated control over thousands of records is not averaged against a 20-item sample. The target line is the internal one at ${fmtPct(POLICY.CONFORMANCE_TARGET)}, not a regulatory figure.`,
+    title: 'Conformance shortfall by procedure',
+    subtitle: `Points below the ${fmtPct(TARGET)} internal target. Furthest first; a procedure at or above target draws no bar.`,
+    footnote: `Conformance itself is items conforming ÷ items tested, weighted by what was actually tested, so a procedure carrying an automated control over thousands of records is not averaged against a 20-item sample. The target is the internal one at ${fmtPct(TARGET)}, not a regulatory figure.`,
     draw: (w) => barsH(w, {
-      rows: sopRows, band: 32, bar: 17, maxValue: 1, labelMax: 90,
-      display: (r) => (r.r.conformance === null ? '—' : fmtPct(r.r.conformance, 1)),
-      threshold: POLICY.CONFORMANCE_TARGET, thresholdLabel: `${fmtPct(POLICY.CONFORMANCE_TARGET)} target`,
+      rows: sopRows, band: 32, bar: 17, maxValue: worstGap, labelMax: 90,
+      display: (r) => (r.r.conformance === null ? 'no result'
+        : r.value === 0 ? `${fmtPct(r.r.conformance, 1)} — at target`
+        : `${r.value.toFixed(1)} pts below · ${fmtPct(r.r.conformance, 1)}`),
       tipTitle: (r) => `${r.r.sop} · ${r.r.sopTitle}`,
       tipRows: (r) => [
-        { value: r.r.conformance === null ? '—' : fmtPct(r.r.conformance, 1), name: 'conforming', color: 'var(--series-1)' },
+        { value: r.r.conformance === null ? '—' : fmtPct(r.r.conformance, 1), name: 'conforming', color: 'var(--magnitude)' },
         { value: `${fmtInt(r.r.passed)} of ${fmtInt(r.r.tested)}`, name: 'items tested' },
         { value: `${fmtInt(r.r.automated)} of ${fmtInt(r.r.controls)}`, name: 'controls automated' },
       ],
@@ -3930,28 +4283,43 @@ function renderProcess(host, slice) {
     },
   }));
 
-  /* ---- Assurance coverage: how each control is actually tested ---- */
-  const ASSURANCE = [
-    { label: 'Continuous, whole population', v: '--asr-3', n: pc.rows.filter((r) => r.control.method === 'Automated').length },
-    { label: 'Periodic sample, in date', v: '--asr-2', n: pc.rows.filter((r) => r.control.method !== 'Automated' && r.result.staleDays === 0).length },
-    { label: 'Sample overdue or never run', v: '--asr-1', n: pc.rows.filter((r) => r.control.method !== 'Automated' && r.result.staleDays > 0).length },
-  ];
-  const assuranceTotal = sum(ASSURANCE.map((a) => a.n)) || 1;
-  grid.appendChild(figure({
-    title: 'Assurance coverage — how each control is tested',
-    subtitle: 'Strength of the evidence behind each control, not whether it passed.',
-    legend: ASSURANCE.map((a) => ({ label: a.label, color: `var(${a.v})`, shape: 'rect' })),
-    footnote: 'An ordered scale: continuous testing over the whole population is stronger evidence than a periodic sample, and a sample nobody has run is not evidence at all. Moving a control up this scale is the work that makes the conformance figure above worth trusting.',
-    draw: (w) => stackedRow(w, {
-      segments: ASSURANCE.map((a) => ({ label: a.label, value: a.n, varName: a.v })),
-      totalLabel: `${fmtInt(pc.automatedCount + pc.manualCount)} controls across ${fmtInt(pc.bySop.length)} procedures`,
-    }),
-    table: {
-      columns: [{ key: 'k', label: 'Assurance' }, { key: 'n', label: 'Controls', num: true }, { key: 'share', label: 'Share', num: true }],
-      rows: ASSURANCE.map((a) => ({ k: a.label, n: fmtInt(a.n), share: fmtPct(a.n / assuranceTotal, 1) })),
-    },
-  }));
+  /* The stacked "assurance coverage" bar that used to sit here carried three
+     integers — 11 / 4 / 2 — directly beneath a KPI tile already reading
+     "11 of 17 · 11 run against the whole population; 6 rely on a periodic
+     sample" and beside another already reading "2" for tests past frequency.
+     Three components, one fact. The space now goes to the per-control view,
+     which is what an audit lead actually reads and what no other component on
+     the page was showing: every control, how it is tested, when it was last
+     tested, and what it found. */
   host.appendChild(grid);
+
+  /* ---- Every control, one row each ---- */
+  host.appendChild(html('div', { class: 'section-head' }, [
+    html('p', { class: 'eyebrow', text: 'Controls' }),
+    html('h2', { text: 'Control register' }),
+    html('p', { text: 'Every SOP step under test, with the evidence behind it. A continuous control is evaluated against the whole population on every load; a manual control carries the result of a periodic sample, and the sample size is stated because a small one cannot support a strong conclusion. A control that produced no result at all is called out rather than counted as passing.' }),
+  ]));
+  const ctlRows = pc.rows.slice().sort((a, b) => {
+    const av = a.result.conformance, bv = b.result.conformance;
+    if (av === null && bv === null) return a.control.id.localeCompare(b.control.id);
+    if (av === null) return -1;
+    if (bv === null) return 1;
+    return av - bv;
+  });
+  host.appendChild(sortableTable({
+    rows: ctlRows, caption: 'Control register',
+    initial: { key: 'conf', dir: 'asc' },
+    columns: [
+      { key: 'id', label: 'Control', sort: (r) => r.control.id, cell: (r) => r.control.id },
+      { key: 'sop', label: 'Procedure', sort: (r) => r.control.sop, cell: (r) => `${r.control.sop} — ${r.control.sopTitle}`, wrap: true },
+      { key: 'method', label: 'Method', sort: (r) => r.control.method, cell: (r) => r.control.method },
+      { key: 'freq', label: 'Frequency', sort: (r) => r.control.frequency, cell: (r) => r.control.frequency },
+      { key: 'tested', label: 'Examined', num: true, sort: (r) => r.result.tested, cell: (r) => (r.result.unresolved ? '—' : `${fmtInt(r.result.tested)} ${r.result.unit}`) },
+      { key: 'conf', label: 'Conforming', num: true, sort: (r) => (r.result.conformance === null ? -1 : r.result.conformance), cell: (r) => (r.result.conformance === null ? '—' : fmtPct(r.result.conformance, 1)) },
+      { key: 'last', label: 'Last tested', sort: (r) => (r.result.lastTestedOn ? r.result.lastTestedOn.getTime() : 0), cell: (r) => (r.result.unresolved ? 'No result' : r.control.method === 'Automated' ? 'Continuous' : fmtDate(r.control.lastTestedOn)) },
+      { key: 'capa', label: 'Open actions', num: true, sort: (r) => r.control.findings.filter((f) => openFindingAt(f, AS_OF)).length, cell: (r) => fmtInt(r.control.findings.filter((f) => openFindingAt(f, AS_OF)).length) },
+    ],
+  }));
 
   /* ---- Open corrective actions ---- */
   const open = pc.findings.filter((f) => openFindingAt(f, AS_OF)).sort((a, b) => a.dueOn - b.dueOn);
@@ -4018,6 +4386,14 @@ function renderProcess(host, slice) {
 /* ============================================================================
    SORTABLE TABLE
    ========================================================================== */
+/* Sort order and open rows survive a re-render, because they are the reader's
+   place in the data rather than a property of the markup. Held as closure
+   locals — which is what they were — they were destroyed by any unrelated
+   action: changing a filter silently threw away a column sort the user had
+   chosen, and closed every row they had opened, with no notice and no undo.
+   Keyed by caption, which is already unique per table. */
+const TABLE_STATE = new Map();
+
 function sortableTable({ rows, columns, initial, caption, detail = null, focusKey = null }) {
   const card = html('section', { class: 'card' });
   const wrap = html('div', { class: 'tablewrap', style: 'max-height:560px; overflow:auto' });
@@ -4025,8 +4401,12 @@ function sortableTable({ rows, columns, initial, caption, detail = null, focusKe
   table.appendChild(html('caption', { class: 'sr-only', text: caption }));
   const thead = html('thead');
   const tbody = html('tbody');
-  let sortKey = initial.key, sortDir = initial.dir;
-  const expanded = new Set();
+  if (!TABLE_STATE.has(caption)) {
+    TABLE_STATE.set(caption, { sortKey: initial.key, sortDir: initial.dir, expanded: new Set() });
+  }
+  const tstate = TABLE_STATE.get(caption);
+  let sortKey = tstate.sortKey, sortDir = tstate.sortDir;
+  const expanded = tstate.expanded;
   if (focusKey && detail) expanded.add(focusKey);   // arrive with the record open
 
   const htr = html('tr');
@@ -4037,6 +4417,7 @@ function sortableTable({ rows, columns, initial, caption, detail = null, focusKe
       onclick: () => {
         if (sortKey === col.key) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
         else { sortKey = col.key; sortDir = col.num ? 'desc' : 'asc'; }
+        tstate.sortKey = sortKey; tstate.sortDir = sortDir;
         paint();
       },
     }, [
@@ -4133,6 +4514,18 @@ function fillSelect(sel, values, allLabel) {
 }
 
 function render() {
+  /* Every workflow verb on this page — reassigning an owner, clearing an
+     action, drilling into a record — went through render(), which empties the
+     pane and rebuilds it. Nothing put focus back, so each one dropped a
+     keyboard operator at the top of the document and reflowed the page under a
+     mouse pointer. The in-table row toggle already solved this by re-finding
+     its own button after paint(); the fix here is the same idea made general.
+     Interactive controls carry a stable data-fk, and the element wearing the
+     one that had focus gets it back, at the scroll position it was at. */
+  const priorFk = document.activeElement && document.activeElement.dataset
+    ? document.activeElement.dataset.fk : null;
+  const priorScroll = window.scrollY;
+
   REDRAWS.length = 0;
   hideTip();
   const slice = currentSlice();
@@ -4166,6 +4559,17 @@ function render() {
   else if (STATE.view === 'auth') renderAuthorizations(document.getElementById('view-auth'), slice);
   else if (STATE.view === 'class') renderClassification(document.getElementById('view-class'), slice);
   else renderProcess(document.getElementById('view-process'), slice);
+
+  if (priorFk) {
+    const again = document.querySelector(`[data-fk="${CSS.escape(priorFk)}"]`)
+      /* The control may be gone on purpose — clearing an action destroys the
+         row it lived on. Fall back to the section that owned it. */
+      || (/^(owner|reason|clear):/.test(priorFk) ? document.querySelector('[data-fk="queue-heading"]') : null);
+    if (again) {
+      again.focus({ preventScroll: true });
+      window.scrollTo({ top: priorScroll });
+    }
+  }
 }
 
 /* Three separate mechanisms on this page once turned "we do not know" into
@@ -4226,11 +4630,31 @@ function boot() {
   fillSelect(document.getElementById('f-site'), sites, 'All sites');
   fillSelect(document.getElementById('f-regime'), ['ITAR', 'EAR'], 'ITAR and EAR');
 
+  /* Programs and sites are not independent: three quarters of the 32 possible
+     pairings — 24 of them — name no record at all. Offering all 32 made most of
+     the filter space a dead end, and landing on one produced a view reporting
+     actions against nothing. Each select now offers only the values that still
+     leave records once the other is applied, and a selection that the other
+     select invalidates is dropped rather than silently kept. */
+  function refreshFilterOptions() {
+    const inProgram = (a) => STATE.program === 'all' || a.program === STATE.program;
+    const inSite = (a) => STATE.site === 'all' || a.site === STATE.site;
+    const progOpts = [...new Set(DATA.authorizations.filter(inSite).map((a) => a.program))].sort();
+    const siteOpts = [...new Set(DATA.authorizations.filter(inProgram).map((a) => a.site))].sort();
+    if (STATE.program !== 'all' && !progOpts.includes(STATE.program)) STATE.program = 'all';
+    if (STATE.site !== 'all' && !siteOpts.includes(STATE.site)) STATE.site = 'all';
+    fillSelect(document.getElementById('f-program'), progOpts, 'All programs');
+    fillSelect(document.getElementById('f-site'), siteOpts, 'All sites');
+    document.getElementById('f-program').value = STATE.program;
+    document.getElementById('f-site').value = STATE.site;
+  }
+
   for (const [id, key] of [['f-program', 'program'], ['f-site', 'site'], ['f-regime', 'regime']]) {
     document.getElementById(id).addEventListener('change', (e) => {
       STATE[key] = e.target.value;
       STATE.queueExpanded = false;
       STATE.focus = null;
+      refreshFilterOptions();
       render();
     });
   }
@@ -4239,6 +4663,7 @@ function boot() {
     STATE.queueExpanded = false;
     STATE.focus = null;
     for (const id of ['f-program', 'f-site', 'f-regime']) document.getElementById(id).value = 'all';
+    refreshFilterOptions();
     render();
   });
 
