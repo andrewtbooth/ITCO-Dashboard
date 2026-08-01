@@ -11,8 +11,11 @@ authorization numbers, foreign parties, determinations and audit results are all
 generated. It is a proof of concept for layout and metric definitions, not a
 compliance record.
 
-Open `index.html` in a browser. There is no build step, no package manager, and
-no network dependency.
+**Live: https://andrewtbooth.github.io/ITCO-Dashboard/**
+
+Or open `index.html` in a browser. There is no build step, no package manager,
+and no network dependency — the file is entirely self-contained, so it also
+works from a local copy, an email attachment or a disconnected machine.
 
 ---
 
@@ -354,9 +357,27 @@ adrift from the selection that produced it.
 
 Each view prints separately — the tab you are on is the one that comes out.
 
+## Deployment
+
+`.github/workflows/pages.yml` publishes the site to GitHub Pages on every push
+to `main`. The site is the repository root: there is nothing to build, so the
+deployed artifact is `index.html` itself.
+
+A workflow rather than a one-off settings change, so the published site cannot
+drift from `main` and the deployment is reviewable in the diff.
+
+One step could not be automated. `actions/configure-pages` runs with
+`enablement: true`, but the default `GITHUB_TOKEN` cannot *create* a Pages site
+even with `pages: write` — it fails with *"Resource not accessible by
+integration"*. Pages therefore has to be switched on once by hand, at
+**Settings → Pages → Build and deployment → Source → GitHub Actions**. After
+that the workflow is self-sustaining.
+
 ## Layout
 
 ```
-index.html    the entire dashboard — styles, synthetic data, derivations, charts, interactions
-README.md     this file
+index.html                      the entire dashboard — styles, synthetic data,
+                                derivations, charts, interactions
+README.md                       this file
+.github/workflows/pages.yml     publishes the dashboard to GitHub Pages
 ```
