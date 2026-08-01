@@ -21,26 +21,21 @@ works from a local copy, an email attachment or a disconnected machine.
 
 ## What it covers
 
-Three modules, chosen as the ones that most directly drive an Empowered
-Official's risk picture — what is authorized, what the items are, and whether the
-procedures are being followed:
+Five modules, one queue.
 
-| Module | What it answers |
-|---|---|
-| **Authorizations & agreements** | What is authorized, what is about to lapse, whether anything has been filed to replace it, how much authorized value is left, and which conditions have not been acknowledged |
-| **Jurisdiction & classification** | What share of the item master has a determination of record, how old the backlog is, and where the control concentration sits |
-| **Process compliance** | Whether the written SOP is the procedure being followed, how strong the evidence behind each control is, and whether audit findings get closed |
+- **Authorizations and agreements** — licences and Part 124 agreements, their
+  line items, provisos, shipments, renewals and consumption against both
+  ceilings.
+- **Jurisdiction and classification** — the determination of record for every
+  part, its basis, its re-review cycle, and the backlog that has none.
+- **International pursuits and programs** — what the company is chasing abroad,
+  and whether it could lawfully deliver it today.
+- **Global anti-corruption monitoring** — the third parties acting for the
+  company abroad, what they are paid, and when anybody last looked at them.
+- **Process compliance** — whether the written procedure is the procedure being
+  followed.
 
-The first two are on one page so they can check each other. The parts named on an
-authorization join to the item master, which is what lets the dashboard ask the
-question neither module can answer alone: **is anything being exported under an
-authorization that does not cover it?**
-
-Deliberately out of scope for this POC, and the obvious next modules: restricted
-party screening, foreign nationals and deemed exports, AES/EEI filing accuracy,
-and voluntary disclosure tracking.
-
-## The four views
+## The six views
 
 **Posture** opens with the count of open compliance actions, six KPI tiles each
 carrying a 12-month trend, and a prioritized *Needs attention* queue. Every row
@@ -95,6 +90,72 @@ Because automated measures re-derive against the filtered slice, SOP conformance
 moves with the program and site filters while a manual sample result — taken once,
 across the business — does not. The page says so on the tab.
 
+### International pursuits and programs
+
+A pursuit is the only forward-looking record on the page. Everything else
+reports what already happened; a pursuit is where trade compliance can still
+change an outcome instead of describing one.
+
+Its **export readiness is not stored**. It is recomputed, every time you look,
+from four things that live in other modules:
+
+| Input | Question it answers |
+| --- | --- |
+| Live authorizations naming the program and destination | Is there anything that could lawfully carry this? |
+| Parts on those authorizations | Is anything on the route still undetermined? |
+| Third parties engaged in the territory | Is the party we would sell through in good standing? |
+| The destination itself | What exposure band are we operating in? |
+
+A stored readiness flag goes stale the moment any of those four move — which is
+exactly when somebody would rely on it.
+
+Readiness separates **blockers** from **watch items** from **context**. That
+distinction is the whole value of the status: an early version folded the
+program's overall classification coverage and the destination's exposure band
+into the verdict, and because neither is ever perfect, every pursuit on the page
+came back the same and no pursuit could ever read as ready. A status that is
+always the same status is not a status. Classification is now judged on the
+parts that would actually move under the authorizations covering that
+destination, which is both specific and answerable.
+
+Opening a pursuit gives you the authorizations covering that country as links
+into the Authorizations module, and the third parties in that territory as links
+into Anti-corruption. The link runs the other way too: a third party's record
+lists the live pursuits that depend on it, because a party out of standing
+matters more when a bid is riding on it, and that is invisible from the party's
+own record.
+
+### Global anti-corruption monitoring
+
+The unit of record is the third party, because that is where the exposure sits:
+under the FCPA and the UK Bribery Act a company answers for people acting on its
+behalf far more often than for its own employees.
+
+**Risk is a property of the arrangement, not of the country.** The territory's
+exposure band is one input; what the party does, whether its commission sits
+above the written-justification band, and whether it carries political exposure
+are the others. The resulting engagement tier is what sets the diligence refresh
+cycle — one year at the top tier, three at the bottom — because a risk rating
+that does not change what the programme *does* is decoration.
+
+Two things follow from that, and both are deliberate:
+
+- **The country bands are illustrative placeholders and the page says so.** A
+  real deployment binds them to a published index with a source and a vintage.
+  Printing a bare risk verdict against the name of a real country, on a page
+  whose own banner says every record is synthetic, is not a thing this build
+  will do.
+- **Outstanding items are split into material and housekeeping.** An unresolved
+  screening match and a lapsed training record are both gaps, and pooling them
+  into one "not in good standing" flag is the same mistake as pooling a 20-item
+  sample with a 4,000-record population test — the number goes up and stops
+  telling anyone what to do. The register carries both counts separately.
+
+Screening is treated as a distinct question from diligence, with its own clock:
+diligence asks who a party is, screening asks whether a government has already
+said no, and a screen is a statement about a date rather than a permanent
+clearance.
+
 ## Metric definitions
 
 | Metric | Definition |
@@ -124,16 +185,26 @@ entered the item master.
 
 | Severity | Rule | Why it fires |
 |---|---|---|
-| Critical | Temporary authorization expired with items not reconciled as returned | Items abroad past expiry are outside an authorization until reconciled or re-authorized |
-| Critical | Shipment recorded after authorization expiry | Assess against the voluntary disclosure decision, 22 CFR 127.12 |
-| Critical | Part determined ITAR named on an EAR authorization | A USML article moves on State Department authorization; shipping one against a BIS licence is an export made without the approval it required |
+| Critical | Shipped past the value or quantity the authorization allows | An ITAR licence expires on whichever ceiling it reaches first (22 CFR 123.21); an EAR licence is limited by both, subject to the shipping tolerances at 15 CFR 750.11 |
+| Critical | Temporary authorization expired with items not reconciled as returned | No return reconciliation is recorded and no approval is linked |
+| Critical | Shipment recorded after authorization expiry | Shipments carry dates after the expiration date; what covered them is not established in the record |
+| Critical | Part determined ITAR shipped against an EAR authorization | Shipments are recorded on a line whose part carries an ITAR determination of record, dated on or after that determination |
+| Serious | Part determined ITAR listed on an EAR authorization | The listing and the determination of record disagree, and nothing has moved on that line yet |
 | Serious | Part with no determination named on a live authorization | The authorization asserts what the item is; nobody has decided |
 | Serious | Authorization expiring with no replacement application filed | Renewal lead time is weeks for a licence and months for an agreement — the decision needed making long before the expiry date |
 | Serious | Control not tested within its own frequency | An untested control is not a control; the absence of a test is itself the finding |
 | Serious | Corrective action past its committed date | The deficiency is now documented and unremediated |
 | Serious | Authorized value >85% consumed with >6 months of term remaining | The value will run out long before the authorization does, and an amendment takes longer to obtain than the balance will cover |
+| Critical | Unresolved restricted-party screening match on an engaged third party | A government has already said no to somebody; payments and shipments should hold until the match is cleared or confirmed |
+| Critical | Red flag recorded on an engaged third party | A red flag is a fact requiring assessment, not a conclusion — the absence of a recorded assessment is what an enforcement review finds |
+| Serious | Third-party due diligence not refreshed within its cycle | Without a current file the company cannot show what it knew or when |
+| Serious | Third party not screened within the screening cycle | Lists change continuously, so a screen is a statement about a date |
+| Serious | Commission above the band requiring written justification | Not improper in itself; what the policy asks for is a justification tying it to identifiable services |
+| Serious | Live pursuit with an unresolved export or third-party blocker | Every item is cheaper to resolve before a commitment is made to the customer |
+| Watch | Gift or hospitality above the threshold with no pre-approval | Pre-approval is the control; recording afterwards documents the event without ever testing it |
+| Watch | Pursuit past qualification with no trade compliance review | The questions get harder to answer usefully the further a capture runs |
 | Serious | 3+ provisos not acknowledged on a live authorization | The most common finding in a licensing audit |
-| Serious | Supporting records not on file | Five-year retention applies, 22 CFR 122.5 and 15 CFR 762 |
+| Serious | Supporting records not on file | Five-year retention applies, 22 CFR 122.5 and 15 CFR 762.2 |
 | Serious | Part in the item master 90+ days without a determination | Blocks shipment, quoting, and foreign-national disclosure decisions |
 | Serious | ITAR determination with no written basis retained | An unsupported determination does not survive an audit |
 | Watch | Determination past its re-review date | Control lists and configurations move; a stale determination becomes the wrong one |
@@ -142,7 +213,7 @@ entered the item master.
 
 Severity orders the queue, but within a tier the rule kinds are dealt out
 round-robin — one rule matching forty records would otherwise fill the visible
-queue and bury the other fourteen.
+queue and bury the other twenty-four.
 
 The queue is truncated by default, but **never across the critical tier**: the
 default view always runs to the end of critical and a few rows into the next
@@ -158,10 +229,30 @@ setting — never a bare assertion. The citations in use:
 | Reference | Used for |
 |---|---|
 | 22 CFR 123.5 | Temporary export licences (DSP-73) and the obligation to return the items |
-| 22 CFR 127.1 | Violations, including failing to comply with the terms or conditions of a licence — the basis for the proviso rules |
-| 22 CFR 127.12 | Voluntary disclosure |
-| 22 CFR 122.5 | ITAR recordkeeping, five years — supporting records and the retained basis for a determination |
-| 15 CFR 762 | EAR recordkeeping, five years |
+| 22 CFR 123.21 | Duration of an ITAR licence — it expires when the total value **or** quantity authorized has been shipped, or on the expiration date, whichever comes first |
+| 22 CFR 120.11 | The U.S. Munitions List, where a part's determination of record disagrees with the authorization it is listed on |
+| 22 CFR 122.5 | ITAR recordkeeping, five years |
+| 15 CFR 750.7 | EAR licence issuance and validity period |
+| 15 CFR 750.7(f), 750.11 | An EAR licence is limited by both quantity and value, subject to shipping tolerances — where the full quantity has not shipped, value may run up to 10% over |
+| 15 CFR 762.2 | EAR records to be retained |
+| 15 U.S.C. 78dd-1 | FCPA anti-bribery provisions — the basis for the red-flag rule |
+| 15 U.S.C. 78m(b)(2) | FCPA books and records — the basis for the commission rule |
+
+**A citation travels with the regime of the record it sits on.** Nothing cites an
+ITAR provision on a BIS licence or the reverse; the rules that run across both
+resolve their citation from `a.regime` through one helper, `citeFor`. An earlier
+draft hardcoded 22 CFR 127.12 on the after-expiry rule, which has no regime
+test, so EAR rows carried an ITAR voluntary-disclosure citation. That is worse
+than an uncited row: it is a specific claim about which law applies, made by a
+tool, in a record somebody reads back later without the tool there to qualify
+it.
+
+Two citations were removed rather than corrected. 22 CFR 127.1 no longer appears
+on the proviso rules: an unacknowledged proviso is an internal control gap, not
+in itself a violation, and the rule also ran over EAR authorizations. 22 CFR
+122.5 no longer backs the written-basis rule: it is a records-retention
+provision, not the source of an obligation to reason about jurisdiction. Both
+are now `Policy:` settings, which is what they always were.
 
 Everything else the queue raises is a `Policy:` setting, shown as such on the
 row. Citations locate the obligation; **they are not legal advice**, and the
@@ -173,21 +264,45 @@ re-review cycle as its own constant, `REVIEW_CYCLE_YEARS`.
 
 ### What the rules deliberately do not do
 
-There is no rule for restricted party screening, deemed exports, or filing
-accuracy, because those modules are out of scope and a rule that half-checks
-them would be worse than none. Every rule here runs on data the two in-scope
-modules actually hold.
+There is no rule for deemed exports, AES/EEI filing accuracy, or voluntary
+disclosure tracking, because those modules are out of scope and a rule that
+half-checks them would be worse than none. Restricted-party screening is now
+modelled, but only for third-party intermediaries — end users and consignees are
+stored and not yet screened, and that gap is named here rather than left to be
+discovered. Every rule runs on data an in-scope module actually holds.
 
 ## Working the queue
 
 Every action carries the analyst who owns it and the date it fell due. The due
 date is derived, not assigned: each rule reports the date its condition actually
-became true — the expiry date, the shipment that broke the licence, the date
-cumulative shipped value crossed 85% — and the remediation window for its
-severity is added to that. A finding cannot be made to look fresh by being
+became true — the expiry date, the shipment that took a line past its ceiling,
+the date cumulative shipped value crossed 85% — and the remediation window for
+its severity is added to that. A finding cannot be made to look fresh by being
 discovered late.
 
+The onset date is the date the condition arose, and deliberately not the date
+anyone first saw it. Splitting the two — running the remediation clock from
+detection rather than from onset — is a fair criticism of this design, and it is
+not implemented here for a specific reason: this page recomputes every rule from
+scratch on load and has no persistence, so a detection date would be a property
+of a snapshot series that does not exist. With one snapshot it is the extract
+date for everything, which is worse than not having it. Detection dating is a
+snapshot-store feature, and it arrives free the day monthly snapshots do.
+
+One rule was previously dated so that it was born overdue: the renewal rule
+fires at 90 days to expiry but dated its onset to the 120-day lead time, then
+added a 30-day window — so every one of them was due on the day it first
+appeared. Onset for that rule is now the day the condition becomes visible.
+
 Actions can be **reassigned to another analyst** and **cleared from the queue**.
+Clearing requires a disposition — remediated, not applicable, risk accepted,
+duplicate, deferred, referred to counsel — and the button stays disabled until
+one is chosen. Each clearance is written to a visible session log with its
+reason, owner and time. An earlier draft let the row simply vanish, which in a
+compliance tool is the wrong default twice over: an auditor asks why an action
+was closed far more often than whether it was, and a free-text box would not
+have helped because the point of a reason code is that it is countable.
+
 Both are held in the browser session only: there is no system of record behind
 this page, and a reload restores everything. The page says so next to the
 controls rather than leaving it to be discovered.
@@ -212,8 +327,46 @@ The mock data layer is fenced inside `index.html` by a single comment block:
 It exposes exactly one object:
 
 ```js
-DATA = { asOf: Date, authorizations: Authorization[], classifications: Part[] }
+DATA = {
+  asOf: Date,
+  authorizations: Authorization[],
+  classifications: Part[],
+  controls: Control[],
+  pursuits: Pursuit[],          // international opportunities
+  intermediaries: ThirdParty[], // anti-corruption
+  giftsLog: GiftEntry[],        // gifts, hospitality, contributions
+}
 ```
+
+A `Pursuit` deliberately stores almost nothing derived — no readiness flag, no
+blocker list, no coverage figure. Those are computed against the other modules
+at read time. What it does store is what the deal *is*: program, destination,
+stage, channel, estimated value, decision date, whether technical data is in
+scope, which authorization kinds it would need, and whether a compliance review
+has happened.
+
+A `ThirdParty` stores the relationship and its two clocks — `lastDiligenceOn`
+with a `refreshDueOn` derived from the engagement tier, and `lastScreenedOn`
+with its own cycle — plus commission, spend, political exposure and any red
+flags recorded in the file.
+
+An authorization carries **line items**, not a flat list of part numbers. Each
+line has its own quantity and value ceiling, and each shipment names the line it
+moved on and the quantity it took:
+
+```js
+lines:     [{ lineNo, partNumber, uom, qtyAuthorized, valueAuthorizedUsd }]
+shipments: [{ date, lineNo, qty, valueUsd, ref }]
+```
+
+This is the one structural thing a real feed has to supply that a simpler model
+does not, and it is load-bearing: under 22 CFR 123.21 a licence is exhausted by
+whichever ceiling it reaches first, so a line can sit comfortably inside its
+authorized value and still be over-shipped on quantity. A model that tracks only
+value cannot ask the question, and the ceiling that binds is routinely the one it
+is not watching. Agreements name articles without authorizing a quantity, so
+their ceilings are `null` — an agreement is bound by its term and its scope, not
+by a number it never carried.
 
 Both record schemas are documented in full in the comment block directly above
 the generators — that comment is the integration contract. Point `DATA` at a
@@ -247,12 +400,26 @@ destination patterns being right — none of which needs a real name.
 These are the places where the obvious data model would produce a number a
 trade compliance professional does not recognise:
 
-- **Agreements do not burn value.** A TAA and an MLA authorize defense services
-  and technical data; the hardware supporting them moves on its own licences.
+- **Agreements do not burn value.** A TAA, an MLA and a WDA are all Part 124
+  agreements: they authorize an arrangement — defense services, technical data,
+  a distribution territory — and the hardware moves on DSP-5s that cite them.
   They carry no value ceiling, so utilization, the amendment threshold and the
-  value-by-region roll-up all skip them — showing a TAA at "62% consumed" is
-  the fastest way to lose a subject-matter audience. Provisos, records and
-  expiry still apply, and that is where agreements actually generate work.
+  value-by-region roll-up all skip them; showing a TAA at "62% consumed" is the
+  fastest way to lose a subject-matter audience. Provisos, records and expiry
+  still apply, and that is where agreements actually generate work.
+  The WDA was marked value-bearing in an earlier draft, which double-counted its
+  value in the region roll-up and invented a consumption figure for a ceiling it
+  never had.
+- **An undetermined part belongs to both regime filters.** A part's regime is
+  the outcome of a determination, so scoping the item master on that outcome
+  deleted the backlog the moment anyone filtered. Guessing a presumptive regime
+  from the program's other authorizations reads as more precise and is worse:
+  nearly every program here is majority ITAR, so the guess simply emptied the
+  EAR backlog instead of the ITAR one and the same reassuring 100.0% came back
+  under a different filter. Undetermined parts now appear under both. The cost
+  is that the two filtered views overlap rather than partition, which the
+  classification view says on its face — a ratio that is honest about what it
+  cannot yet place beats a partition that is tidy and wrong.
 - **The parts named on an authorization follow its regime.** A BIS licence
   lists EAR items, a DSP-5 lists USML items. Drawn at random, roughly half of
   every EAR licence's parts would be USML and the cross-module check would fire
@@ -306,8 +473,53 @@ because uniform draws produce charts that quietly contradict what they claim:
   chart is a genuine roll-up rather than a relabelling — which is what its
   footnote claims it is.
 
-Utilization above 100% appears only where value was shipped against an
-authorization that had none left — a condition the rules flag.
+- **A minority of live authorizations are shipped past a ceiling**, and some
+  lines carry an approved quantity that buys less than the approved value, so
+  quantity binds before value does. Both are planted deliberately: a control
+  with nothing to find looks exactly like a control that does not work, and the
+  only way to tell them apart is to put the condition in the data and watch the
+  rule catch it.
+- **Shipments vary in size but none of them dominates its licence.** Drawing
+  each as a fixed fraction of what is left makes the first shipment enormous and
+  the last trivial, which put roughly a quarter of the portfolio over a line
+  ceiling through nothing but variance. A finding that common is not a finding.
+
+Two rates in the generator are set to make a rule demonstrable rather than to
+model reality, and neither should be read as a claim about frequency: shipments
+recorded after expiry, and parts determined ITAR listed on a BIS licence. The
+second is rare here whatever rate is used, because this portfolio is ITAR-heavy
+by design — 21 of 398 authorizations are BIS licences — so **the critical half
+of the ITAR-on-EAR split rule may have no members in any given extract**. That
+is a property of the demonstration data, not of the rule.
+
+### No record may exit scope silently
+
+Three separate mechanisms in an earlier draft turned *we do not know* into
+*nothing to see*, and they are worth naming because they were the same bug
+wearing three faces — scope narrowing on the strength of the very condition
+being looked for.
+
+- **Consumption was part of the live test.** An authorization shipped past its
+  ceiling dropped out of `liveAuths`, and therefore out of every rule and every
+  measure, at exactly the moment it became a finding. It then surfaced as
+  "Fully consumed", which reads as tidy. Consumption is no longer part of that
+  test, over-consumption is its own critical rule, and the status label
+  distinguishes a licence that was used up from one that was overrun.
+- **The regime filter scoped parts on their determination.** An undetermined
+  part has no regime, so filtering to ITAR or EAR deleted precisely the
+  population the coverage metric exists to count: coverage read exactly 100.0%
+  and the backlog read zero, one click from the default view. Undetermined parts
+  now survive every regime filter.
+- **An unresolvable measure key scored zero and excused itself.** A typo in a
+  control's `measure` produced a population of zero, an em-dash conformance, no
+  weight in the roll-up and — because the overdue rule skipped automated
+  controls — no overdue finding either. Four places where a typo looked like
+  health. It is now its own state, and the overdue exemption follows the result
+  rather than the method.
+
+A `selfCheck()` runs at load and writes to the console if any of the three comes
+back. It is deliberately noisy: a silent check is the thing it exists to
+prevent.
 
 ## Design and accessibility notes
 
@@ -365,12 +577,88 @@ it is switched off under `prefers-reduced-motion`.
   band and from each chart's table view.
 - Tabs follow the ARIA tabs pattern — one tab stop for the set, arrow keys and
   Home/End to move between them. Every table carries a caption as its accessible
-  name, every chart carries its title, and opening a detail row keeps focus on
-  the row you opened.
+  name, and every chart carries its title.
+- **Focus survives a re-render.** Reassigning an owner, clearing an action or
+  opening a record all rebuild the pane, and each one used to drop a keyboard
+  operator at the top of the document and reflow the page under a mouse
+  pointer. Interactive controls carry a stable `data-fk`, and the element
+  wearing the one that had focus gets it back at the scroll position it was at.
+  Where the control was destroyed on purpose — clearing an action removes the
+  row it lived on — focus falls back to the section heading, which re-announces
+  the updated count.
+- **Sort order, open rows and half-chosen dispositions survive too.** They were
+  closure locals and DOM state, so any unrelated action silently discarded
+  them: changing a filter threw away a column sort, closed every open row, and
+  destroyed a disposition picked but not yet committed.
 - Only the visible view holds DOM. Panes that leave the screen are emptied
-  rather than parked, since the active pane is rebuilt from scratch anyway —
-  which keeps the posture view at ~690 nodes and 9 tab stops instead of ~14,700
-  and 490.
+  rather than parked, since the active pane is rebuilt from scratch anyway.
+  Measured on the posture view: **840 nodes and 60 tab stops**, against ~14,700
+  and 490 for a naive build.
+
+  These figures are stated because an earlier version of this file claimed 690
+  nodes and 9 tab stops, which was true when it was written and stopped being
+  true the moment the queue grew a disposition control on every row — 74 extra
+  selects, none of them measured again. A page height of 11,000px and 130 tab
+  stops is what that cost before the queue was rebuilt. An accessibility claim
+  is a measurement with a date on it, not a property.
+
+### What the design review changed
+
+Three designers reviewed the page independently — information design, interaction
+design, and visual system with accessibility. Everything below was measured
+before and after rather than judged by eye.
+
+**The queue became a queue.** Rows were 203–223px of prose, and eighteen of them
+carried the same templated paragraph, so the distinguishing facts were roughly a
+seventh of the ink and nobody could see the shape of their own critical tier
+without eight screens of scrolling. Two selects and a button rendered on every
+row put 74 controls into the page before anyone had decided to act on anything.
+A collapsed row is now one line and one tab stop carrying severity, record,
+what is over and by how much, how late it is and who owns it; the rationale, the
+citation and the controls live in the expansion. Rows went to 41px, the posture
+view from 11,043px to 4,435px, tab stops from 130 to 60, nodes from 2,044 to 840.
+
+**The queue got its own scope.** The three filters at the top of the page answer
+*which records*; severity, owner, rule and a search box answer *which of my
+actions*, which is a different question and the one the page is usually opened
+with. The rules-evaluated table moved above the queue it indexes and its rows
+became buttons, so "27 corrective actions are overdue" is now a route to those
+27 rather than a number under 274 records.
+
+**The KPI row stopped leading with census and means.** Live authorization count
+is the denominator of half the other tiles and actionable by nobody; it gave up
+its slot to value shipped past a ceiling, which had no home above the fold. The
+utilization tile keeps its headline but its note now names the tail — the count
+past the amendment threshold — because the mean sits in the trough of a bimodal
+distribution where almost nothing actually is.
+
+**Ordinal ramps moved off blue.** Blue marked ITAR identity, severity,
+utilization, assurance strength and every single-series magnitude bar at once,
+so every chart on all four tabs was blue and the hue distinguished nothing. The
+ramps are violet now, validated with the skill's own checker in both modes
+(light end 2.34:1, dark end 2.56:1 against a 2:1 ordinal floor), and a new
+`--magnitude` role means a bar saying *how much* never wears the hue that means
+ITAR.
+
+**Contrast and print defects, measured.** The in-bar label threshold switched ink
+at luminance 0.42 where the true crossover — the point at which white and near-
+black contrast equally against the fill — solves to 0.1916, so mid-ramp fills
+took white labels at 2.5–3.0:1. Worst in-bar label contrast is now 5.39:1 light
+and 4.85:1 dark. Print declared `repeat(3, 1fr)` for the KPI row while the
+screen rule two hundred lines above already used `minmax(0, 1fr)` for exactly
+this reason; with the sparkline carrying a hard pixel width the row demanded 956
+of the 688px an A4 page offers at these margins, and the third tile was cut off
+the sheet. It now fits exactly. The audit-readiness meters were painted in status
+colours — a magnitude bar doing a state's job, with `--status-warning` at 1.83:1
+as a data mark, and a 0.2-point difference repainting a whole row amber or
+green. They take one hue; the state stays in the chip, where it has an icon and
+a label.
+
+**One claim the reviewers made did not survive checking.** The lightest ordinal
+step was reported as failing the 3:1 graphical floor at 2.11:1. The rule for an
+ordinal ramp is 2:1 — the validator's own `ORDINAL_LIGHT_FLOOR` — and the bars
+in question are labelled on their own axis, so colour is not the sole
+identifier. It was left alone.
 
 ## Printing
 
