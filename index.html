@@ -803,6 +803,12 @@ function groupBy(xs, key) {
                                   "fully consumed" are all derived from expiresOn
                                   and the shipment history.
      program             string   internal program name
+     mission             string   what the program builds. This is what decides
+                                  which control categories its parts fall in —
+                                  an orbital vehicle program produces USML
+                                  Category XV, an aircraft program VIII — so a
+                                  real feed should carry it rather than leaving
+                                  the codes to look arbitrary.
      site                string   responsible facility
      analyst             string   trade compliance analyst who owns the record.
                                   Every action the queue raises is addressed to
@@ -860,6 +866,7 @@ function groupBy(xs, key) {
      partNumber          string   item-master key
      nomenclature        string   plain description
      program             string   internal program name
+     mission             string   what the program builds; see Authorization
      site                string   responsible facility
      analyst             string   trade compliance analyst who owns the record
      addedOn             Date     date the part entered the item master
@@ -914,15 +921,68 @@ const DATA = (function buildMockData() {
   /* Fixed point of reference. A real feed supplies its own extract timestamp. */
   const asOf = utc(2026, 5, 30);
 
+  /* Programs are invented, but their *mission types* are drawn from the mission
+     areas a mid-size aerospace and defense prime actually operates in: orbital
+     vehicles and space systems, high-altitude and special-mission ISR aircraft,
+     trainer aircraft, C4ISR and electronic warfare, and aviation sustainment.
+
+     The mission is what makes the data ring true, because it decides which
+     control categories the program's parts fall in. Drawn at random, a
+     spaceplane program is as likely to carry USML Category IV — launch
+     vehicles and missiles — as Category XV, and a trade compliance
+     professional spots that instantly. Each program therefore carries the
+     USML categories and ECCNs its mission would actually produce, the
+     authorization kinds that mission tends to need, and the regions it
+     typically ships to.
+
+     Real program names are deliberately NOT used. The rows on this dashboard
+     are export control violations; attaching them to a real company's real
+     programs would produce a document that reads as a record of that
+     company's compliance failures. */
   const PROGRAMS = [
-    { name: 'Kestrel II',       site: 'Everett, WA' },
-    { name: 'Sentinel Radar',   site: 'Everett, WA' },
-    { name: 'Longbow ASE',      site: 'Huntsville, AL' },
-    { name: 'Halberd MRO',      site: 'Huntsville, AL' },
-    { name: 'Talon-X UAS',      site: 'Fort Worth, TX' },
-    { name: 'Vanguard Trainer', site: 'Fort Worth, TX' },
-    { name: 'Meridian SATCOM',  site: 'Torrance, CA' },
-    { name: 'Corvus EW Suite',  site: 'Torrance, CA' },
+    {
+      name: 'Aurora Lift', site: 'Everett, WA', mission: 'Reusable orbital vehicle',
+      usml: ['XV(a)', 'XV(e)(1)', 'XV(f)'], eccn: ['9A515.a.1', '9E515.a', '9D515'],
+      kinds: ['TAA', 'DSP-5', 'MLA'], regions: ['Europe', 'Indo-Pacific'],
+    },
+    {
+      name: 'Highwater ISR', site: 'Everett, WA', mission: 'High-altitude ISR aircraft',
+      usml: ['VIII(a)', 'XI(a)(3)', 'XI(c)(1)'], eccn: ['9A610.a', '6A003.b.4'],
+      kinds: ['DSP-5', 'TAA', 'DSP-73'], regions: ['Europe', 'Indo-Pacific', 'Middle East'],
+    },
+    {
+      name: 'Longbow ASE', site: 'Huntsville, AL', mission: 'Aircraft survivability equipment',
+      usml: ['XI(a)(3)', 'XI(c)(4)', 'IV(h)'], eccn: ['9A610.x', '3A991.a.1'],
+      kinds: ['DSP-5', 'TAA'], regions: ['Middle East', 'Indo-Pacific'],
+    },
+    {
+      name: 'Halberd Sustainment', site: 'Huntsville, AL', mission: 'Special-mission aircraft sustainment',
+      usml: ['VIII(h)', 'VIII(i)'], eccn: ['9A610.a', '9E610'],
+      /* Sustainment is where temporary exports live: articles go abroad for
+         repair and have to come back. */
+      kinds: ['DSP-73', 'TAA', 'WDA'], regions: ['Europe', 'Middle East', 'Indo-Pacific'],
+    },
+    {
+      name: 'Talon-X UAS', site: 'Fort Worth, TX', mission: 'Unmanned aircraft system',
+      usml: ['VIII(a)', 'XI(c)(1)', 'XII(e)'], eccn: ['9A610.x', '9A012.a'],
+      kinds: ['DSP-5', 'TAA'], regions: ['Indo-Pacific', 'Middle East'],
+    },
+    {
+      name: 'Vanguard Trainer', site: 'Fort Worth, TX', mission: 'Undergraduate jet trainer',
+      usml: ['VIII(a)', 'VIII(h)'], eccn: ['9A610.a', '9D610'],
+      /* A co-production trainer is the classic manufacturing licence case. */
+      kinds: ['MLA', 'DSP-5', 'TAA'], regions: ['Europe', 'Indo-Pacific'],
+    },
+    {
+      name: 'Meridian SATCOM', site: 'Torrance, CA', mission: 'Protected satellite communications',
+      usml: ['XV(e)(1)', 'XI(a)(3)'], eccn: ['9A515.a.1', '5A991'],
+      kinds: ['TAA', 'DSP-5'], regions: ['Europe', 'North America', 'Indo-Pacific'],
+    },
+    {
+      name: 'Corvus EW Suite', site: 'Torrance, CA', mission: 'Electronic warfare and spectrum',
+      usml: ['XI(a)(3)', 'XI(c)(4)', 'XII(e)'], eccn: ['3A991.a.1', '5A991'],
+      kinds: ['TAA', 'DSP-5', 'MLA'], regions: ['Europe', 'Indo-Pacific'],
+    },
   ];
 
   const REGIONS = [
@@ -988,10 +1048,15 @@ const DATA = (function buildMockData() {
     'Blanket, thermal', 'Battery, lithium-ion', 'Pump, hydraulic',
     'Manifold, environmental control', 'Waveguide assembly', 'Gimbal, sensor turret',
     'Receiver, GPS', 'Transformer, power conditioning',
+    'Thruster, reaction control', 'Docking mechanism assembly', 'Heat shield tile',
+    'Star tracker assembly', 'Countermeasure dispenser', 'Missile warning sensor',
+    'Antenna, SATCOM steerable', 'Flight test instrumentation unit',
   ];
 
-  const USML = ['IV(h)', 'VIII(h)', 'VIII(i)', 'IX(d)', 'XI(a)(3)', 'XI(c)(1)', 'XI(c)(4)', 'XII(e)', 'XV(e)(1)', 'I(h)'];
-  const ECCN_CONTROLLED = ['9A610.a', '9A610.x', '9E610', '9D610', '7A994', '7A103.a', '3A991.a.1', '5A991', '6A003.b.4'];
+  /* The cross-program pools, for the minority of parts that sit outside their
+     own program's mission categories. */
+  const USML = ['IV(h)', 'VIII(a)', 'VIII(h)', 'VIII(i)', 'IX(d)', 'XI(a)(3)', 'XI(c)(1)', 'XI(c)(4)', 'XII(e)', 'XV(a)', 'XV(e)(1)', 'XV(f)'];
+  const ECCN_CONTROLLED = ['9A610.a', '9A610.x', '9E610', '9D610', '9A515.a.1', '9E515.a', '9D515', '9A012.a', '7A994', '3A991.a.1', '5A991', '6A003.b.4'];
   const ANALYSTS = ['R. Okonjo', 'M. Vargas', 'D. Feldman', 'T. Alderete', 'K. S. Rao', 'J. Whitfield', 'A. Lindqvist'];
   const METHODS = [
     { m: 'Self-determination', w: 62 },
@@ -1006,7 +1071,9 @@ const DATA = (function buildMockData() {
      an airframe mostly VIII. Drawing codes uniformly would flatten the
      concentration chart into ten equal bars and quietly contradict the point
      it is making. */
-  const programControls = new Map(PROGRAMS.map((p) => [p.name, { usml: pick(USML), eccn: pick(ECCN_CONTROLLED) }]));
+  /* The concentration head is the program's own primary category, drawn from
+     the pool its mission produces. */
+  const programControls = new Map(PROGRAMS.map((p) => [p.name, { usml: p.usml[0], eccn: p.eccn[0] }]));
   /* Programs are staffed, so ownership follows the program rather than being
      sprinkled across records at random. */
   const programAnalyst = new Map(PROGRAMS.map((p, i) => [p.name, ANALYSTS[i % ANALYSTS.length]]));
@@ -1032,8 +1099,8 @@ const DATA = (function buildMockData() {
 
     if (!determined) {
       parts.push({
-        partNumber, nomenclature: pick(NOMENCLATURE), program: prog.name, site: prog.site,
-        analyst: programAnalyst.get(prog.name),
+        partNumber, nomenclature: pick(NOMENCLATURE), program: prog.name, mission: prog.mission,
+        site: prog.site, analyst: programAnalyst.get(prog.name),
         addedOn, jurisdiction: null, controlCode: null, determinedOn: null,
         determinedBy: null, method: null, basisOnFile: false, reviewDueOn: null,
       });
@@ -1050,14 +1117,22 @@ const DATA = (function buildMockData() {
     const primary = programControls.get(prog.name);
     const roll = rnd();
     let jurisdiction, controlCode;
-    if (roll < 0.44) { jurisdiction = 'ITAR'; controlCode = chance(0.58) ? primary.usml : pick(USML); }
-    else if (roll < 0.72) { jurisdiction = 'EAR'; controlCode = chance(0.52) ? primary.eccn : pick(ECCN_CONTROLLED); }
+    /* Mostly the program's primary category, otherwise something else its own
+       mission would produce; only rarely a category from outside it, which is
+       what a shared subsystem or a bought-in component looks like. */
+    if (roll < 0.44) {
+      jurisdiction = 'ITAR';
+      controlCode = chance(0.55) ? primary.usml : (chance(0.82) ? pick(prog.usml) : pick(USML));
+    } else if (roll < 0.72) {
+      jurisdiction = 'EAR';
+      controlCode = chance(0.5) ? primary.eccn : (chance(0.82) ? pick(prog.eccn) : pick(ECCN_CONTROLLED));
+    }
     else if (roll < 0.94) { jurisdiction = 'EAR'; controlCode = 'EAR99'; }
     else { jurisdiction = 'Not subject'; controlCode = null; }
 
     parts.push({
-      partNumber, nomenclature: pick(NOMENCLATURE), program: prog.name, site: prog.site,
-      analyst: programAnalyst.get(prog.name),
+      partNumber, nomenclature: pick(NOMENCLATURE), program: prog.name, mission: prog.mission,
+      site: prog.site, analyst: programAnalyst.get(prog.name),
       addedOn, jurisdiction, controlCode, determinedOn,
       determinedBy: pick(ANALYSTS),
       method: weighted(METHODS.map((x) => ({ ...x, w: x.w }))).m,
@@ -1075,9 +1150,18 @@ const DATA = (function buildMockData() {
   const seqs = { 'DSP-5': 2418006, 'DSP-73': 731204, TAA: 2610, MLA: 1142, WDA: 318, BIS: 480311 };
 
   for (let i = 0; i < AUTH_COUNT; i++) {
-    const k = weighted(KINDS);
     const prog = pick(PROGRAMS);
-    const reg = weighted(REGIONS);
+    /* The authorization kind and the destination follow the mission: a
+       sustainment program leans on temporary exports, a co-production trainer
+       on a manufacturing licence, and neither ships everywhere. */
+    /* The target is drawn ONCE, before the lookup. Putting pick() inside the
+       find predicate would redraw it for every element tested, so the search
+       would compare each candidate against a different random target and
+       usually match nothing. */
+    const wantKind = pick(prog.kinds);
+    const wantRegion = pick(prog.regions);
+    const k = chance(0.75) ? KINDS.find((x) => x.kind === wantKind) : weighted(KINDS);
+    const reg = chance(0.78) ? REGIONS.find((r) => r.region === wantRegion) : weighted(REGIONS);
     const destCount = k.kind === 'WDA' || k.kind === 'MLA' ? int(2, 4) : (chance(0.25) ? 2 : 1);
     const destinations = sample(reg.countries, Math.min(destCount, reg.countries.length));
     /* Agreements routinely name parties in more than one region. `region` is
@@ -1241,7 +1325,8 @@ const DATA = (function buildMockData() {
     return {
       id, kind: k.kind, kindLabel: k.kindLabel, regime: k.regime, temporary: k.temporary,
       valueBearing: k.valueBearing,
-      status, program: prog.name, site: prog.site, analyst: programAnalyst.get(prog.name),
+      status, program: prog.name, mission: prog.mission || '', site: prog.site,
+      analyst: programAnalyst.get(prog.name),
       submittedOn, issuedOn, expiresOn,
       authorizedValueUsd, destinations, region: reg.region, foreignParties, provisos, shipments,
       partNumbers: pickParts(prog, k),
@@ -1356,7 +1441,7 @@ const DATA = (function buildMockData() {
       : a.kind === 'WDA' ? `WD-${pad(renewalSeq[a.kind], 4)}-${yy}`
       : `BIS-D${pad(renewalSeq[a.kind], 7)}`;
     const renewal = makeAuth({
-      id: rid, k, prog: { name: a.program, site: a.site }, reg: { region: a.region },
+      id: rid, k, prog: { name: a.program, mission: a.mission, site: a.site }, reg: { region: a.region },
       destinations: a.destinations, status: 'In adjudication',
       submittedOn: addDays(asOf, -int(5, 150)), issuedOn: null, expiresOn: null,
     });
@@ -3095,6 +3180,7 @@ function renderAuthorizations(host, slice) {
       const box = html('div', { class: 'detailbox' });
       const facts = html('div', {}, [html('h4', { text: 'Record' })]);
       const kv = (k, v) => facts.appendChild(html('div', { class: 'kv' }, [html('span', { text: k }), html('span', { text: v })]));
+      kv('Program', `${a.program} — ${a.mission}`);
       kv('Owner', a.analyst);
       kv('Type', a.kindLabel);
       kv('Submitted', fmtDate(a.submittedOn));
