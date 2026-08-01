@@ -224,6 +224,24 @@ The generator is seeded, so the dataset is identical on every load and for every
 viewer. That keeps a demo reproducible and keeps diffs meaningful. Dates are
 handled in UTC throughout for the same reason.
 
+### On using a real company's programs
+
+The programs here are invented. Their *mission types* are drawn from the mission
+areas a mid-size aerospace and defense prime actually operates in, because that
+is what makes the control categories ring true — but the names are not.
+
+That is deliberate, and it is worth stating plainly: **the rows on this dashboard
+are export control violations.** Shipments recorded after expiry, temporary
+exports never reconciled, findings routed to the voluntary disclosure decision.
+Attaching those to a real company's real programs would produce a document that
+reads as a record of that company's compliance failures — and a screenshot of one
+view travels without the synthetic-data banner that sits above the tabs.
+
+It is also simply the wrong move for a demo. Nobody pitching a trade compliance
+tool to a prime shows that prime committing ITAR violations. Realism comes from
+the mission types, the control categories, the authorization mix and the
+destination patterns being right — none of which needs a real name.
+
 ### Domain modelling decisions
 
 These are the places where the obvious data model would produce a number a
@@ -265,9 +283,17 @@ because uniform draws produce charts that quietly contradict what they claim:
 - **Determination dates are drawn first and parts placed into the item master a
   working lag earlier**, not the other way round, so recent months aren't forced
   to show either zero completions or a spike.
-- **Control codes cluster by program.** A radar program is mostly one USML
-  category. Drawn uniformly, the concentration chart flattens into ten equal bars
-  and contradicts its own title.
+- **Control codes follow the program's mission.** Each program carries a mission
+  — reusable orbital vehicle, high-altitude ISR aircraft, aircraft survivability
+  equipment, undergraduate jet trainer, electronic warfare, sustainment — and the
+  USML categories and ECCNs its parts fall in are drawn from what that mission
+  actually produces. An orbital vehicle program lands on Category XV, an aircraft
+  program on VIII, an EW program on XI. Drawn uniformly, a spaceplane is as
+  likely to carry Category IV — launch vehicles and missiles — as XV, and that is
+  the detail a trade compliance professional spots first. The authorization kinds
+  and destination regions follow the mission too: sustainment leans on temporary
+  exports, a co-production trainer on a manufacturing licence, and neither ships
+  everywhere.
 - **Acknowledgement discipline clusters by record**, which is what makes a
   three-or-more proviso finding a different problem from a one-or-two finding.
 - **Proviso gaps close over time.** An authorization issued years ago has been
