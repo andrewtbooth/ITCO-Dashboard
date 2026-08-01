@@ -459,6 +459,13 @@ tr.detail > td { padding: 0 0 16px; white-space: normal; }
   text-transform: uppercase; color: var(--text-muted);
 }
 .detailbox ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 7px; }
+/* A select sizes itself to its longest option, and these options are
+   sentences — left alone it set a 330px floor and pushed the page into
+   horizontal scroll on a phone. */
+.qact .reason { max-width: 100%; min-width: 0; flex: 1 1 12ch; text-overflow: ellipsis; }
+.clearlog { margin: 0 0 10px; padding: 0; list-style: none; display: grid; gap: 6px; }
+.clearlog li { font-size: var(--t-xs); color: var(--text-secondary); display: flex; gap: 9px; line-height: 1.45; }
+.clearlog li .ref { color: var(--text-muted); flex: 0 0 auto; }
 .detailbox li { font-size: var(--t-xs); color: var(--text-secondary); display: flex; gap: 9px; line-height: 1.45; }
 .detailbox li .ref { color: var(--text-muted); flex: 0 0 auto; font-variant-numeric: tabular-nums; }
 .detailbox .kv { display: flex; justify-content: space-between; gap: 14px; font-size: var(--t-xs); padding: 2px 0; }
@@ -741,6 +748,9 @@ const sameMonth = (a, b) => a.getUTCFullYear() === b.getUTCFullYear() && a.getUT
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const fmtDate = (d) => d ? `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}` : '—';
+/* Local wall-clock time, and only ever used for things that happen in this
+   browser session — every date drawn from the record set is UTC. */
+const fmtTime = (d) => d ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
 const fmtMonYear = (d) => `${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 /* Axis labels are month-only, except January, which carries the year so a
    12-month axis crossing a year boundary is never ambiguous. */
@@ -824,13 +834,29 @@ function groupBy(xs, key) {
      foreignParties      [{ name: string, role: string, country: string }]
      provisos            [{ ref: string, text: string, acknowledgedOn: Date|null }]
                                   acknowledgedOn === null means "not acknowledged"
-     shipments           [{ date: Date, valueUsd: number, ref: string }]
-                                  shippedValue is summed from this array, never stored
-     partNumbers         string[] item-master keys, joining to Part.partNumber.
-                                  This join is what lets the two modules check
-                                  each other: an EAR licence listing a part
-                                  determined ITAR is an export without the
-                                  authorization it needs.
+     shipments           [{ date: Date, lineNo: number, qty: number,
+                                   valueUsd: number, ref: string }]
+                                  shippedValue is summed from this array, never
+                                  stored. lineNo joins to lines[].lineNo, which
+                                  is what makes consumption a per-line question
+                                  rather than a portfolio one.
+     lines               [{ lineNo: number, partNumber: string, uom: string,
+                                   qtyAuthorized: number|null,
+                                   valueAuthorizedUsd: number|null }]
+                                  The articles named on the face of the
+                                  authorization. partNumber joins to
+                                  Part.partNumber, and that join is what lets
+                                  the two modules check each other: an EAR
+                                  licence listing a part determined ITAR is an
+                                  export without the authorization it needs.
+                                  Under 22 CFR 123.21 a licence is exhausted by
+                                  whichever ceiling is reached first, so both
+                                  quantity and value are carried per line and
+                                  a real feed must supply both. Agreements name
+                                  articles without authorizing a quantity, so
+                                  their ceilings are null — an agreement is
+                                  bound by its term and its scope, not by a
+                                  number it never had.
      renewalOfId         string|null  set on a pending application that replaces
                                   an existing authorization, so an expiring
                                   authorization can be told apart from an
@@ -1007,7 +1033,12 @@ const DATA = (function buildMockData() {
     { kind: 'DSP-73', kindLabel: 'DSP-73 temporary export',             regime: 'ITAR', termYears: 4,  temporary: true,  valueBearing: true,  w: 11 },
     { kind: 'TAA',    kindLabel: 'Technical assistance agreement',      regime: 'ITAR', termYears: 10, temporary: false, valueBearing: false, w: 15 },
     { kind: 'MLA',    kindLabel: 'Manufacturing license agreement',     regime: 'ITAR', termYears: 10, temporary: false, valueBearing: false, w: 6 },
-    { kind: 'WDA',    kindLabel: 'Warehouse and distribution agreement', regime: 'ITAR', termYears: 10, temporary: false, valueBearing: true,  w: 4 },
+    /* A WDA is a Part 124 agreement like a TAA or an MLA: it approves the
+       distribution arrangement, and the hardware moves on DSP-5s that cite it.
+       It carries no value ceiling to consume, so utilization is not a question
+       that can be asked of one. Marking it value-bearing double-counted its
+       value in the region roll-up and invented a consumption figure for it. */
+    { kind: 'WDA',    kindLabel: 'Warehouse and distribution agreement', regime: 'ITAR', termYears: 10, temporary: false, valueBearing: false, w: 4 },
     { kind: 'BIS',    kindLabel: 'BIS export license',                  regime: 'EAR',  termYears: 4,  temporary: false, valueBearing: true,  w: 26 },
   ];
 
@@ -1227,8 +1258,13 @@ const DATA = (function buildMockData() {
     const undetermined = pool.filter((p) => p.determinedOn === null);
 
     const chosen = sample(onRegime.length ? onRegime : pool, int(2, 5)).map((p) => p.partNumber);
-    /* A USML part sitting on an EAR licence: an export without State approval. */
-    if (offRegime.length && chance(0.05)) chosen.push(pick(offRegime).partNumber);
+    /* A part determined ITAR sitting on a BIS licence, at the same planted rate
+       as the after-expiry shipments. This portfolio is ITAR-heavy by design —
+       21 of 398 authorizations are BIS — so the condition stays rare however it
+       is seeded, and the critical half of the split rule may have no members in
+       any given extract. That is a property of the demonstration data, not of
+       the rule; see the note in the README. */
+    if (offRegime.length && chance(0.18)) chosen.push(pick(offRegime).partNumber);
     /* A part being moved before anyone decided what it is. */
     if (undetermined.length && chance(0.06)) chosen.push(pick(undetermined).partNumber);
     return [...new Set(chosen)];
@@ -1242,6 +1278,68 @@ const DATA = (function buildMockData() {
     const foreignParties = sample(PARTIES, int(1, 3)).map((name, idx) => ({
       name, role: idx === 0 ? 'End-user' : pick(PARTY_ROLES), country: pick(destinations),
     }));
+
+    /* Line items. An authorization names articles, and under 22 CFR 123.21 a
+       licence is exhausted by whichever ceiling it reaches first — value or
+       quantity. Splitting the authorized value across lines and giving each
+       line its own quantity is what makes that race visible; a single
+       authorization-level value can only ever show one of the two ways a
+       licence runs out, and it is routinely the one that is not binding.
+       Agreements name articles without authorizing a quantity, so their
+       ceilings stay null: an agreement is bound by its term and its scope,
+       not by a number it never carried. */
+    const shares = pickParts(prog, k).map((partNumber) => ({ partNumber, w: 0.4 + rnd() }));
+    const shareTotal = sum(shares.map((s) => s.w));
+    const lines = shares.map(({ partNumber, w }, idx) => {
+      const valueAuthorizedUsd = k.valueBearing
+        ? Math.max(1000, Math.round(authorizedValueUsd * w / shareTotal / 100) * 100)
+        : null;
+      /* Unit price is a generator quantity, not a record. A real feed carries
+         quantity on the licence and on the shipment and never has to infer
+         it; here it is what converts a drawn value into a plausible count. */
+      const unitPriceUsd = Math.round(Math.exp(7.4 + gauss() * 1.1)) + 250;
+      /* Quantity and value almost never exhaust together. Where the approved
+         quantity buys less than the approved value, quantity binds first —
+         which is precisely the case that is invisible when only value is
+         tracked, and the reason both ceilings have to be carried. */
+      const qtySlack = chance(0.09) ? 0.80 + rnd() * 0.12 : 1.05 + rnd() * 0.5;
+      return {
+        lineNo: idx + 1, partNumber, uom: 'each',
+        qtyAuthorized: k.valueBearing
+          ? Math.max(1, Math.round((valueAuthorizedUsd / unitPriceUsd) * qtySlack))
+          : null,
+        valueAuthorizedUsd,
+        unitPriceUsd,
+      };
+    });
+    /* Shipments are booked against whichever lines still have room, weighted by
+       how much room each has left. Assigning them at random instead would put a
+       quarter of the portfolio over a line ceiling through nothing but
+       variance, and a finding that common is not a finding — it is noise with a
+       severity attached. A line goes over only when there is no headroom left
+       anywhere, which is the condition worth surfacing. */
+    const headroom = new Map(lines.map((l) => [l.lineNo, l.valueAuthorizedUsd || 0]));
+    const pickLine = (valueUsd) => {
+      /* Prefer a line that can actually absorb the shipment, weighted by how
+         much room it has left; fall back to the roomiest line when none can.
+         That fallback is the genuine breach — value going out against a line
+         with nothing left on it — and keeping it as the only path to an
+         over-ceiling line is what stops the condition being manufactured by
+         the shape of the generator rather than by the facts. */
+      const fits = lines.filter((l) => headroom.get(l.lineNo) >= valueUsd);
+      const pool = fits.length ? fits : lines;
+      let chosen;
+      if (fits.length) {
+        const w = pool.map((l) => Math.max(1, headroom.get(l.lineNo)));
+        let r = rnd() * sum(w);
+        chosen = pool[pool.length - 1];
+        for (let i = 0; i < pool.length; i++) { r -= w[i]; if (r <= 0) { chosen = pool[i]; break; } }
+      } else {
+        chosen = pool.reduce((best, l) => (headroom.get(l.lineNo) > headroom.get(best.lineNo) ? l : best), pool[0]);
+      }
+      headroom.set(chosen.lineNo, headroom.get(chosen.lineNo) - valueUsd);
+      return chosen;
+    };
 
     /* Provisos accrue on agreements far more than on a one-off licence.
        Acknowledgement discipline clusters by record rather than scattering
@@ -1278,29 +1376,48 @@ const DATA = (function buildMockData() {
     const shipments = [];
     if (status === 'Issued' && k.valueBearing) {
       const fastBurn = chance(0.2);
+      /* A minority of live authorizations are shipped past their authorized
+         value. That has to exist in the data for the over-consumption rule
+         to mean anything: a control with nothing to find looks exactly like
+         a control that does not work, and the only way to tell them apart is
+         to plant the condition and watch the rule catch it. */
+      const overshoot = expiresOn > asOf && chance(0.06);
       const u = rnd();
-      const target = fastBurn ? 0.78 + rnd() * 0.22
+      const target = overshoot ? 1.02 + rnd() * 0.16
+        : fastBurn ? 0.78 + rnd() * 0.22
         : u < 0.10 ? 0 : u < 0.62 ? rnd() * 0.55 : u < 0.88 ? 0.55 + rnd() * 0.3 : 0.85 + rnd() * 0.15;
       const termSpan = Math.max(1, daysBetween(issuedOn, expiresOn));
-      const burnSpan = fastBurn ? termSpan * (0.12 + rnd() * 0.22) : termSpan;
+      /* An overshoot has to have already happened to be a finding, so its
+         shipments are drawn inside the elapsed term rather than the whole
+         one — otherwise the tail that breaches the ceiling falls after the
+         extract date and is filtered out as not yet a record. */
+      const burnSpan = overshoot ? Math.max(30, daysBetween(issuedOn, asOf) * (0.5 + rnd() * 0.4))
+        : fastBurn ? termSpan * (0.12 + rnd() * 0.22) : termSpan;
       const n = target === 0 ? 0 : Math.max(1, Math.min(16, Math.round(target * 14 + int(0, 3))));
       let remaining = target * authorizedValueUsd;
       for (let s = 0; s < n; s++) {
-        const share = s === n - 1 ? remaining : remaining * (0.25 + rnd() * 0.45);
+        /* Shipments vary in size but none of them dominates the licence. Taking
+           a fixed fraction of what is left instead makes the first shipment
+           enormous and the last trivial, which is both wrong and the reason
+           line ceilings appeared to breach: one early shipment larger than any
+           single line could hold. */
+        const share = s === n - 1 ? remaining
+          : Math.min(remaining, (remaining / (n - s)) * (0.55 + rnd() * 0.9));
         remaining -= share;
         shipments.push({
           date: addDays(issuedOn, Math.round(Math.pow(rnd(), 1.7) * burnSpan)),
+          lineNo: pickLine(Math.max(1000, Math.round(share / 100) * 100)).lineNo,
           valueUsd: Math.max(1000, Math.round(share / 100) * 100),
           ref: `EEI-${pad(int(100000, 999999), 6)}`,
         });
       }
       /* Rounding each shipment to a whole hundred, with a floor under the
          smallest, can push the summed total past the authorized value on a
-         low-value authorization. Scale it back so utilization over 100% only
-         ever means the one thing it should mean: value shipped against an
-         authorization that had none left, which the rules do flag. */
+         low-value authorization. Scale that back, so that value over the
+         ceiling means the one thing it should mean rather than an artefact
+         of the generator — but leave a deliberate overshoot alone. */
       const drawn = sum(shipments.map((s) => s.valueUsd));
-      if (drawn > authorizedValueUsd) {
+      if (!overshoot && drawn > authorizedValueUsd) {
         const k = authorizedValueUsd / drawn;
         for (const s of shipments) s.valueUsd = Math.max(100, Math.floor(s.valueUsd * k / 100) * 100);
       }
@@ -1316,11 +1433,21 @@ const DATA = (function buildMockData() {
       if (expiresOn < asOf && daysBetween(expiresOn, asOf) > 50 && shipments.length && chance(0.18)) {
         shipments.push({
           date: addDays(expiresOn, int(3, 44)),
+          lineNo: pickLine(0).lineNo,
           valueUsd: Math.round(authorizedValueUsd * (0.02 + rnd() * 0.06) / 100) * 100,
           ref: `EEI-${pad(int(100000, 999999), 6)}`,
         });
       }
+
+      /* Quantity is settled last, against the line the shipment moved on and
+         the value it finally carries, so that rescaling value can never leave
+         the two ceilings telling different stories about the same shipment. */
+      const lineById = new Map(lines.map((l) => [l.lineNo, l]));
+      for (const s of shipments) {
+        s.qty = Math.max(1, Math.round(s.valueUsd / lineById.get(s.lineNo).unitPriceUsd));
+      }
     }
+    for (const l of lines) delete l.unitPriceUsd;
 
     return {
       id, kind: k.kind, kindLabel: k.kindLabel, regime: k.regime, temporary: k.temporary,
@@ -1329,7 +1456,7 @@ const DATA = (function buildMockData() {
       analyst: programAnalyst.get(prog.name),
       submittedOn, issuedOn, expiresOn,
       authorizedValueUsd, destinations, region: reg.region, foreignParties, provisos, shipments,
-      partNumbers: pickParts(prog, k),
+      lines,
       recordsOnFile: status === 'Issued' ? chance(0.935) : true,
       /* Temporary exports must be reconciled as returned. Leaving that blank
          after expiry is the single worst finding in this data set. */
@@ -1402,7 +1529,15 @@ const DATA = (function buildMockData() {
     const passed = auto ? null : sampleSize - failures;
 
     const findings = [];
-    const raiseCount = auto ? (chance(0.3) ? 1 : 0) : (failures > 0 ? int(1, 2) : 0);
+    /* A corrective action exists because a test found something. On a manual
+       control that is knowable here, because the sample result is drawn here.
+       On an automated control it is not: the measure is evaluated against the
+       finished record set, which does not exist yet. Raising one at a flat
+       probability — as this did — produced corrective actions on controls that
+       were passing and none on controls that were failing, which severs the
+       one link the process view is meant to show. Automated controls get
+       theirs in a second pass, once their measures can actually be run. */
+    const raiseCount = auto ? 0 : (failures > 0 ? int(1, 2) : 0);
     for (let f = 0; f < raiseCount; f++) {
       const raisedOn = lastTestedOn ? addDays(lastTestedOn, int(0, 12)) : addDays(asOf, -int(30, 300));
       const dueOn = addDays(raisedOn, 60);
@@ -1449,6 +1584,9 @@ const DATA = (function buildMockData() {
     authorizations.push(renewal);
   }
 
+  /* Corrective actions on automated controls are added in a second pass, in
+     seedCapas below — their measures cannot run until the record set they
+     measure is finished, which is here. */
   return { asOf, authorizations, classifications: parts, controls };
 })();
 
@@ -1466,7 +1604,6 @@ const DATA = (function buildMockData() {
    ========================================================================== */
 
 const shippedBy = (a, at) => sum(a.shipments.filter((s) => s.date <= at).map((s) => s.valueUsd));
-const shippedValue = (a) => sum(a.shipments.map((s) => s.valueUsd));
 /** null for an authorization that carries no value ceiling — an agreement has
     no utilization, and reporting 0% for one is a made-up number. */
 const utilization = (a, at) => (a.valueBearing && a.authorizedValueUsd > 0 ? shippedBy(a, at) / a.authorizedValueUsd : null);
@@ -1474,10 +1611,77 @@ const utilization = (a, at) => (a.valueBearing && a.authorizedValueUsd > 0 ? shi
 const isIssuedBy = (a, at) => a.issuedOn !== null && a.issuedOn <= at;
 const isPendingAt = (a, at) => a.submittedOn <= at && !isIssuedBy(a, at);
 
-/** Live = issued, unexpired, and not fully consumed. */
-const isLive = (a, at) => isIssuedBy(a, at) && a.expiresOn > at
-  && (!a.valueBearing || shippedBy(a, at) < a.authorizedValueUsd);
+/** Live = issued and unexpired.
+    Consumption is deliberately NOT part of this test. An authorization shipped
+    to its ceiling is still live: it still has a term, still carries provisos,
+    and shipping against it is still an export. Dropping it here — as this once
+    did — took an over-consumed licence out of every rule and every measure at
+    exactly the moment it became a finding, and left it labelled "fully
+    consumed", which reads as tidy. Scope must never narrow on the strength of
+    the condition being looked for. */
+const isLive = (a, at) => isIssuedBy(a, at) && a.expiresOn > at;
 const liveAuths = (auths, at) => auths.filter((a) => isLive(a, at));
+
+/** Consumption per line, on both ceilings. Under 22 CFR 123.21 a licence is
+    exhausted by whichever it reaches first, so a line at 60% of its authorized
+    value and 120% of its authorized quantity is over-shipped — and a figure
+    that tracks only value calls it comfortable. */
+function lineConsumption(a, at) {
+  const byLine = new Map(a.lines.map((l) => [l.lineNo, { line: l, valueUsd: 0, qty: 0 }]));
+  for (const s of a.shipments) {
+    if (s.date > at) continue;
+    const rec = byLine.get(s.lineNo);
+    if (rec) { rec.valueUsd += s.valueUsd; rec.qty += s.qty || 0; }
+  }
+  return [...byLine.values()].map((rec) => ({
+    ...rec,
+    valuePct: rec.line.valueAuthorizedUsd > 0 ? rec.valueUsd / rec.line.valueAuthorizedUsd : null,
+    qtyPct: rec.line.qtyAuthorized > 0 ? rec.qty / rec.line.qtyAuthorized : null,
+  }));
+}
+
+/* The ceiling test is not the same under both regimes, and running one test
+   over both is how a tool ends up reporting as a breach something the
+   regulation expressly permits.
+     ITAR — 22 CFR 123.21: the licence expires when the total value OR the
+     quantity authorized has been shipped, whichever comes first. There is no
+     tolerance; 100% is the line.
+     EAR — 15 CFR 750.7(f) limits the licence by both quantity and value,
+     subject to the shipping tolerances at 15 CFR 750.11. Where the full
+     quantity has not yet shipped, total value may run up to 10% over the
+     licensed dollar value. Once quantity is exhausted the tolerance is gone,
+     and there is no tolerance at all on a commodity licensed in dollar value
+     alone — which is why a line has to carry both ceilings for this test to
+     be answerable. */
+const EAR_VALUE_TOLERANCE = 0.10;
+const valueAllowance = (a, qtyOver) =>
+  (a.regime === 'EAR' && !qtyOver && a.lines.some((l) => l.qtyAuthorized > 0) ? 1 + EAR_VALUE_TOLERANCE : 1);
+
+/** The lines shipped past a ceiling they were actually held to. */
+const overShippedLines = (a, at) => (!a.valueBearing ? [] : lineConsumption(a, at)
+  .map((c) => {
+    const qtyOver = c.qtyPct > 1;
+    const allowed = valueAllowance(a, qtyOver);
+    return { ...c, qtyOver, allowed, valueOver: c.valuePct > allowed };
+  })
+  .filter((c) => c.qtyOver || c.valueOver)
+  .map((c) => ({ ...c, binding: c.qtyOver ? 'quantity' : 'value' })));
+
+/** The shipment that first took a line past a ceiling — read off the history
+    rather than assumed, so the clock starts when the value actually went. */
+function firstBreachOn(a, line, at) {
+  let qty = 0;
+  let value = 0;
+  for (const s of a.shipments) {
+    if (s.date > at || s.lineNo !== line.lineNo) continue;
+    qty += s.qty || 0;
+    value += s.valueUsd;
+    const qtyOver = line.qtyAuthorized > 0 && qty > line.qtyAuthorized;
+    if (qtyOver) return s.date;
+    if (line.valueAuthorizedUsd > 0 && value > line.valueAuthorizedUsd * valueAllowance(a, false)) return s.date;
+  }
+  return null;
+}
 
 const openProvisos = (a, at) => a.provisos.filter((p) => p.acknowledgedOn === null || p.acknowledgedOn > at);
 
@@ -1489,10 +1693,13 @@ const undeterminedParts = (parts, at) => knownParts(parts, at).filter((p) => p.d
     authorized value — read off the shipment history rather than assumed, so
     the amendment clock starts when the value actually went, not when someone
     happened to look. */
-function crossedOn(a, fraction) {
+function crossedOn(a, fraction, at) {
   const target = a.authorizedValueUsd * fraction;
   let acc = 0;
   for (const s of a.shipments) {
+    /* A shipment dated after the as-of point has not happened yet from where
+       the reader is standing, so it cannot be what started a clock. */
+    if (at !== undefined && s.date > at) break;
     acc += s.valueUsd;
     if (acc >= target) return s.date;
   }
@@ -1560,6 +1767,50 @@ function trendMonths(at) {
    Each measure states what it counted. That matters more than the percentage:
    a conformance figure whose denominator is unstated is unauditable.
    ========================================================================== */
+/* Corrective actions on automated controls, raised against what their measures
+   actually report. This cannot run inside the generator: a measure evaluates
+   against the finished record set, and inside the generator that set does not
+   exist yet. Raising them there at a flat probability — as this once did — put
+   corrective actions on controls that were passing and none on controls that
+   were failing, which severs the single link the process view exists to show.
+   It has its own seeded stream so that adding it does not shift every other
+   number on the page. */
+function seedCapas(data, measures) {
+  let t = 0x9E3779B9;
+  const rnd = () => {
+    t += 0x6D2B79F5;
+    let x = t;
+    x = Math.imul(x ^ (x >>> 15), x | 1);
+    x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+  const int = (lo, hi) => lo + Math.floor(rnd() * (hi - lo + 1));
+  const chance = (p) => rnd() < p;
+  const notes = [
+    'Test population sampled from the wrong date range; re-run scheduled.',
+    'Procedure step not performed for two of the records examined.',
+    'Evidence retained but not linked to the transaction record.',
+    'Control owner changed mid-period; handover not documented.',
+  ];
+  for (const c of data.controls) {
+    if (c.method !== 'Automated') continue;
+    const m = measures[c.measure];
+    if (!m) continue;
+    if (m.failing(data, data.asOf).length === 0) continue;
+    /* Not every failing measure has a corrective action open against it. That
+       gap is one of the things the process view is for. */
+    if (!chance(0.7)) continue;
+    const raisedOn = addDays(data.asOf, -int(20, 320));
+    c.findings.push({
+      id: `CA-${c.id.replace(/[^0-9]/g, '')}-A`,
+      note: notes[int(0, notes.length - 1)],
+      raisedOn, dueOn: addDays(raisedOn, 60),
+      closedOn: chance(0.4) ? addDays(raisedOn, int(8, 85)) : null,
+      owner: c.owner,
+    });
+  }
+}
+
 const AUTOMATED_MEASURES = {
   'classification-sla': {
     unit: 'parts in the item master',
@@ -1639,12 +1890,26 @@ const FREQUENCY_DAYS = { Continuous: 1, Quarterly: 92, 'Semi-annual': 183, Annua
 function controlResult(control, slice, at) {
   if (control.method === 'Automated') {
     const m = AUTOMATED_MEASURES[control.measure];
-    const population = m ? m.of(slice, at).length : 0;
-    const failures = m ? m.failing(slice, at).length : 0;
+    /* A measure key that does not resolve is a broken control, and it must not
+       be able to pass for a working one. It used to report a population of
+       zero, an em-dash conformance, no weight in the roll-up, and — because
+       the overdue rule skips automated controls — no overdue finding either:
+       four different places where a typo looked like health. An unresolvable
+       key is now its own state, and everything downstream treats it as a
+       control that produced no result rather than one that passed. */
+    if (!m) {
+      return {
+        tested: 0, failures: 0, passed: 0, conformance: null,
+        unit: '', continuous: true, unresolved: true,
+        lastTestedOn: null, staleDays: Infinity,
+      };
+    }
+    const population = m.of(slice, at).length;
+    const failures = m.failing(slice, at).length;
     return {
       tested: population, failures, passed: population - failures,
       conformance: population > 0 ? (population - failures) / population : null,
-      unit: m ? m.unit : '', continuous: true,
+      unit: m.unit, continuous: true, unresolved: false,
       lastTestedOn: at, staleDays: 0,
     };
   }
@@ -1660,6 +1925,12 @@ function controlResult(control, slice, at) {
   };
 }
 
+/** Was this finding open as of `at`? Raised by then, and not yet closed by
+    then. Testing only `!closedOn` reports today's open findings at every
+    historical point, which turns a 12-month trend into twelve copies of the
+    present — the one thing a trend must never be. */
+const openFindingAt = (f, at) => f.raisedOn <= at && (f.closedOn === null || f.closedOn > at);
+
 /** Roll controls up to their procedure, weighting by what was actually tested. */
 function processCompliance(slice, at) {
   const rows = (slice.controls || []).map((c) => ({ control: c, result: controlResult(c, slice, at) }));
@@ -1672,7 +1943,7 @@ function processCompliance(slice, at) {
       tested, passed, failures: tested - passed,
       conformance: tested > 0 ? passed / tested : null,
       stale: rs.filter((r) => r.result.staleDays > 0).length,
-      openFindings: sum(rs.map((r) => r.control.findings.filter((f) => !f.closedOn).length)),
+      openFindings: sum(rs.map((r) => r.control.findings.filter((f) => openFindingAt(f, at)).length)),
     };
   }).sort((a, b) => (a.conformance ?? 1) - (b.conformance ?? 1));
 
@@ -1687,8 +1958,8 @@ function processCompliance(slice, at) {
     manualCount: rows.filter((r) => r.control.method !== 'Automated').length,
     staleCount: rows.filter((r) => r.result.staleDays > 0).length,
     neverTested: rows.filter((r) => r.control.method !== 'Automated' && !r.control.lastTestedOn).length,
-    openFindings: findings.filter((f) => !f.closedOn).length,
-    overdueFindings: findings.filter((f) => !f.closedOn && f.dueOn <= at).length,
+    openFindings: findings.filter((f) => openFindingAt(f, at)).length,
+    overdueFindings: findings.filter((f) => openFindingAt(f, at) && f.dueOn <= at).length,
     findings,
   };
 }
@@ -1704,7 +1975,26 @@ function processCompliance(slice, at) {
    slice: a BIS licence listing a USML part is a defect of that licence
    whatever the item-master filter happens to be set to. */
 const PART_INDEX = new Map(DATA.classifications.map((p) => [p.partNumber, p]));
-const partsOn = (a) => a.partNumbers.map((n) => PART_INDEX.get(n)).filter(Boolean);
+
+/* A part's regime is the outcome of a determination, and an undetermined part
+   has no outcome yet. Scoping the item master on that outcome removed exactly
+   the parts the coverage metric exists to count: selecting ITAR or EAR made the
+   backlog vanish and coverage read 100.0%, which is the most reassuring wrong
+   number this page could produce, one click from the default view.
+   An undetermined part therefore stays in scope under *either* regime filter,
+   because which one it belongs to is exactly the question nobody has answered.
+   Guessing a presumptive regime from the program's other authorizations reads
+   as more precise and is worse: nearly every program here is majority ITAR, so
+   the guess quietly emptied the EAR backlog instead of the ITAR one and the
+   same reassuring 100.0% came back under a different filter.
+   The cost is that the two filtered views overlap rather than partition — the
+   backlog is counted under both — which the classification view says on its
+   face. A ratio that is honest about what it cannot yet place beats a
+   partition that is tidy and wrong. */
+const partInRegime = (p, regime) => regime === 'all' || p.jurisdiction === null || p.jurisdiction === regime;
+const partsOn = (a) => a.lines.map((l) => PART_INDEX.get(l.partNumber)).filter(Boolean);
+/** The line a part sits on, for a rule that has to name where it is listed. */
+const lineFor = (a, partNumber) => a.lines.find((l) => l.partNumber === partNumber) || null;
 /** Authorizations that have a replacement application pending as of `at`. */
 const renewalsInFlight = (auths, at) => new Set(
   auths.filter((a) => a.renewalOfId && isPendingAt(a, at)).map((a) => a.renewalOfId));
@@ -1721,7 +2011,46 @@ const SEVERITY_META = {
   good:     { label: 'On track', icon: '✓' },
 };
 
+/* A citation travels with the regime of the record it is attached to. Naming
+   an ITAR provision on a BIS licence is worse than leaving the row uncited: it
+   is a specific claim about which law applies, made by a tool, in a record
+   somebody will read back later without the tool there to qualify it. */
+const citeFor = (a, { itar, ear }) => (a.regime === 'ITAR' ? itar : ear);
+
 const RULES = [
+  {
+    key: 'over-consumption',
+    severity: 'critical',
+    name: 'Shipped past the value or quantity the authorization allows',
+    run: (s, at) => liveAuths(s.authorizations, at)
+      .map((a) => ({ a, over: overShippedLines(a, at) }))
+      .filter((x) => x.over.length > 0)
+      .map(({ a, over }) => {
+        const qty = over.filter((c) => c.binding === 'quantity');
+        const val = over.filter((c) => c.binding === 'value');
+        const worst = over.reduce((w, c) => (Math.max(c.qtyPct || 0, c.valuePct || 0) > Math.max(w.qtyPct || 0, w.valuePct || 0) ? c : w), over[0]);
+        const parts = [];
+        if (qty.length) parts.push(`${qty.length === 1 ? 'line ' + qty[0].line.lineNo : qty.length + ' lines'} past the authorized quantity`);
+        if (val.length) parts.push(`${val.length === 1 ? 'line ' + val[0].line.lineNo : val.length + ' lines'} past the authorized value`);
+        return {
+          subject: a.id,
+          title: `${a.id} — shipped past an authorized ceiling`,
+          why: `${parts.join(' and ')}. ${a.regime === 'ITAR'
+            ? 'Under 22 CFR 123.21 a licence expires when the total value or quantity authorized has been shipped, whichever comes first, so movements recorded after that point are not covered by it.'
+            : `Under 15 CFR 750.7(f) the licence is limited by both quantity and value, subject to the shipping tolerances at 15 CFR 750.11; the ${fmtPct(EAR_VALUE_TOLERANCE, 0)} value tolerance has been applied here and is exhausted once the approved quantity has shipped.`} Confirm the shipment records against the authorization and establish what covers the balance.`,
+          value: fmtPct(Math.max(worst.qtyPct || 0, worst.valuePct || 0)),
+          valueLabel: `of line ${worst.line.lineNo} ${worst.binding}`,
+          meta: [a.kindLabel, a.program, a.destinations.join(', '), `Expires ${fmtDate(a.expiresOn)}`],
+          owner: a.analyst,
+          /* The clock starts at the shipment that took the line past its
+             ceiling, not at issuance — that is the date the record itself
+             establishes, and it is the only one that is not an assumption. */
+          onsetOn: firstBreachOn(a, worst.line, at) || a.issuedOn,
+          cite: citeFor(a, { itar: '22 CFR 123.21', ear: '15 CFR 750.7(f), 750.11' }),
+          view: 'auth', focus: a.id,
+        };
+      }),
+  },
   {
     key: 'temp-unreconciled',
     severity: 'critical',
@@ -1732,7 +2061,7 @@ const RULES = [
         const overdue = daysBetween(a.expiresOn, at);
         return {
           subject: a.id, title: `${a.id} — temporary export not reconciled`,
-          why: `Items exported under a temporary authorization are still abroad ${overdue} days after it expired, with no record of their return. Until they are reconciled as returned or covered by a new authorization, they are abroad without one.`,
+          why: `Items exported under a temporary authorization have no return reconciliation recorded ${overdue} days after it expired, and no renewal or written approval is linked to them. Confirm the return, locate the approval covering them, or refer to trade counsel.`,
           value: `${fmtInt(overdue)} days`, valueLabel: 'past expiry',
           meta: [a.kindLabel, a.program, a.destinations.join(', '), `Expired ${fmtDate(a.expiresOn)}`],
           owner: a.analyst, onsetOn: a.expiresOn, cite: '22 CFR 123.5', view: 'auth', focus: a.id,
@@ -1749,29 +2078,72 @@ const RULES = [
       .filter((x) => x.late.length > 0)
       .map(({ a, late }) => ({
         subject: a.id, title: `${a.id} — ${late.length === 1 ? 'shipment' : `${late.length} shipments`} recorded after expiry`,
-        why: `${late.length === 1 ? 'A shipment was' : `${late.length} shipments were`} recorded against this authorization after it expired, the last one ${daysBetween(a.expiresOn, late[late.length - 1].date)} days past the expiration date. Assess against the voluntary disclosure decision.`,
+        why: `${late.length === 1 ? 'A shipment was' : `${late.length} shipments were`} recorded against this authorization after its expiration date of ${fmtDate(a.expiresOn)}, the last one ${daysBetween(a.expiresOn, late[late.length - 1].date)} days past it. What authorized these movements is not established in the record. Confirm the shipment dates, locate any authorization that covers them, and refer to trade counsel.`,
         value: fmtUsd(sum(late.map((sh) => sh.valueUsd))), valueLabel: 'shipped after expiry',
         meta: [a.kindLabel, a.program, a.destinations.join(', '), `Expired ${fmtDate(a.expiresOn)}`],
-        owner: a.analyst, onsetOn: late[0].date, cite: '22 CFR 127.12', view: 'auth', focus: a.id,
+        owner: a.analyst, onsetOn: late[0].date,
+        cite: citeFor(a, { itar: '22 CFR 123.21', ear: '15 CFR 750.7' }), view: 'auth', focus: a.id,
+      })),
+  },
+  /* This was one critical rule, and it fired on any EAR authorization that
+     merely listed a part determined ITAR — whether or not anything had ever
+     moved on it. A list that disagrees with the determination of record is a
+     real problem, but it is a different problem from articles having gone out,
+     and collapsing the two put a paperwork mismatch at the top of the queue
+     alongside completed exports. They are now two rules with two predicates,
+     and only the one that tests the shipment history is critical. */
+  {
+    key: 'usml-shipped-on-ear-auth',
+    severity: 'critical',
+    name: 'Part determined ITAR shipped against an EAR authorization',
+    run: (s, at) => liveAuths(s.authorizations, at)
+      .filter((a) => a.regime === 'EAR')
+      .map((a) => {
+        const bad = partsOn(a).filter((p) => p.jurisdiction === 'ITAR' && p.determinedOn <= at);
+        const lineNos = new Set(bad.map((p) => lineFor(a, p.partNumber)?.lineNo).filter((n) => n !== undefined));
+        /* Only shipments that post-date the determination count: before that
+           date the record did not say the article was ITAR, and a rule that
+           ignores this dates the company's knowledge earlier than its own
+           records support. */
+        const moved = a.shipments.filter((sh) => sh.date <= at && lineNos.has(sh.lineNo)
+          && bad.some((p) => lineFor(a, p.partNumber)?.lineNo === sh.lineNo && sh.date >= p.determinedOn));
+        return { a, bad, moved };
+      })
+      .filter((x) => x.bad.length > 0 && x.moved.length > 0)
+      .map(({ a, bad, moved }) => ({
+        subject: a.id,
+        title: `${a.id} — ${moved.length === 1 ? 'a shipment' : `${moved.length} shipments`} against an EAR authorization on an ITAR-determined line`,
+        why: `${bad.map((p) => p.partNumber).join(', ')} ${bad.length === 1 ? 'carries an ITAR determination' : 'carry ITAR determinations'} of record (${[...new Set(bad.map((p) => `USML ${p.controlCode}`))].join(', ')}), and ${moved.length === 1 ? 'a shipment was' : `${moved.length} shipments were`} recorded against ${bad.length === 1 ? 'that line' : 'those lines'} of this BIS authorization on or after the determination date. Confirm which determination stands and refer to the empowered official.`,
+        value: fmtUsd(sum(moved.map((sh) => sh.valueUsd))), valueLabel: 'moved on those lines',
+        meta: [a.kindLabel, a.program, a.destinations.join(', '), `Expires ${fmtDate(a.expiresOn)}`],
+        owner: a.analyst,
+        onsetOn: moved[0].date,
+        cite: 'Policy: refer to 22 CFR 127.12 on assessment', view: 'auth', focus: a.id,
       })),
   },
   {
-    key: 'usml-on-ear-auth',
-    severity: 'critical',
-    name: 'Part determined ITAR named on an EAR authorization',
+    key: 'usml-listed-on-ear-auth',
+    severity: 'serious',
+    name: 'Part determined ITAR listed on an EAR authorization',
     run: (s, at) => liveAuths(s.authorizations, at)
       .filter((a) => a.regime === 'EAR')
-      .map((a) => ({ a, bad: partsOn(a).filter((p) => p.jurisdiction === 'ITAR' && p.determinedOn <= at) }))
-      .filter((x) => x.bad.length > 0)
+      .map((a) => {
+        const bad = partsOn(a).filter((p) => p.jurisdiction === 'ITAR' && p.determinedOn <= at);
+        const lineNos = new Set(bad.map((p) => lineFor(a, p.partNumber)?.lineNo).filter((n) => n !== undefined));
+        const moved = a.shipments.filter((sh) => sh.date <= at && lineNos.has(sh.lineNo)
+          && bad.some((p) => lineFor(a, p.partNumber)?.lineNo === sh.lineNo && sh.date >= p.determinedOn));
+        return { a, bad, moved };
+      })
+      .filter((x) => x.bad.length > 0 && x.moved.length === 0)
       .map(({ a, bad }) => ({
         subject: a.id,
-        title: `${a.id} — ${bad.length === 1 ? 'a USML part is' : `${bad.length} USML parts are`} named on an EAR authorization`,
-        why: `${bad.map((p) => p.partNumber).join(', ')} ${bad.length === 1 ? 'is' : 'are'} determined ITAR (${[...new Set(bad.map((p) => `USML ${p.controlCode}`))].join(', ')}), and ${bad.length === 1 ? 'it is' : 'they are'} named on an EAR licence. A USML article moves on State Department authorization; shipping one against a BIS licence is an export made without the approval it required, not a paperwork mismatch.`,
-        value: `${bad.length}`, valueLabel: bad.length === 1 ? 'USML part' : 'USML parts',
+        title: `${a.id} — ${bad.length === 1 ? 'a part determined ITAR is' : `${bad.length} parts determined ITAR are`} listed on an EAR authorization`,
+        why: `${bad.map((p) => p.partNumber).join(', ')} ${bad.length === 1 ? 'carries an ITAR determination' : 'carry ITAR determinations'} of record (${[...new Set(bad.map((p) => `USML ${p.controlCode}`))].join(', ')}) and ${bad.length === 1 ? 'is' : 'are'} listed on this BIS authorization. No shipments are recorded against ${bad.length === 1 ? 'that line' : 'those lines'}. The listing and the determination of record disagree; settle which is correct before anything moves.`,
+        value: `${bad.length}`, valueLabel: bad.length === 1 ? 'part' : 'parts',
         meta: [a.kindLabel, a.program, a.destinations.join(', '), `Expires ${fmtDate(a.expiresOn)}`],
         owner: a.analyst,
         onsetOn: new Date(Math.max(a.issuedOn.getTime(), ...bad.map((p) => p.determinedOn.getTime()))),
-        cite: '22 CFR 127.1', view: 'auth', focus: a.id,
+        cite: '22 CFR 120.11', view: 'auth', focus: a.id,
       })),
   },
   {
@@ -1807,7 +2179,12 @@ const RULES = [
           value: `${left} days`, valueLabel: 'until expiry',
           meta: [a.kindLabel, a.program, a.destinations.join(', '), `Expires ${fmtDate(a.expiresOn)}`],
           owner: a.analyst,
-          onsetOn: addDays(a.expiresOn, -POLICY.RENEWAL_LEAD_DAYS),
+          /* The clock starts when the rule can first see the condition, not
+             at the lead time it recommends. Dating onset to the lead time made
+             every one of these arrive already past its remediation date — and
+             a queue where the whole tier is born overdue teaches the reader
+             that overdue means nothing. */
+          onsetOn: addDays(a.expiresOn, -POLICY.EXPIRY_WINDOW_DAYS),
           cite: `Policy: ${POLICY.RENEWAL_LEAD_DAYS}-day renewal lead time`, view: 'auth', focus: a.id,
         }));
     },
@@ -1824,7 +2201,7 @@ const RULES = [
         why: `${fmtUsd(a.authorizedValueUsd - shippedBy(a, at))} of authorized value remains against ${Math.round(rem / 30.4)} months of remaining term. The value will be exhausted long before the authorization expires, and an amendment takes longer to obtain than the remaining balance will cover.`,
         value: fmtPct(u), valueLabel: 'consumed',
         meta: [a.kindLabel, a.program, `${fmtUsd(a.authorizedValueUsd)} authorized`, `Expires ${fmtDate(a.expiresOn)}`],
-        owner: a.analyst, onsetOn: crossedOn(a, POLICY.UTILIZATION_THRESHOLD) || a.issuedOn, cite: 'Policy: amendment at ' + fmtPct(POLICY.UTILIZATION_THRESHOLD), view: 'auth', focus: a.id,
+        owner: a.analyst, onsetOn: crossedOn(a, POLICY.UTILIZATION_THRESHOLD, at) || a.issuedOn, cite: 'Policy: amendment at ' + fmtPct(POLICY.UTILIZATION_THRESHOLD), view: 'auth', focus: a.id,
       })),
   },
   {
@@ -1839,7 +2216,8 @@ const RULES = [
         why: `${open.length} of ${a.provisos.length} provisos on this live authorization have no acknowledgement date recorded. Unacknowledged provisos are the most common finding in a licensing audit, and the conditions bind whether or not anyone has read them.`,
         value: `${open.length}`, valueLabel: `of ${a.provisos.length} provisos`,
         meta: [a.kindLabel, a.program, `Issued ${fmtDate(a.issuedOn)}`],
-        owner: a.analyst, onsetOn: a.issuedOn, cite: '22 CFR 127.1', view: 'auth', focus: a.id,
+        owner: a.analyst, onsetOn: a.issuedOn,
+        cite: 'Policy: acknowledge provisos before shipment', view: 'auth', focus: a.id,
       })),
   },
   {
@@ -1853,7 +2231,7 @@ const RULES = [
         why: `No supporting record set is retained for this authorization. Five-year retention applies from the date of the transaction, and the records are what an audit examines first — their absence is a finding on its own, independent of whether the exports were properly authorized.`,
         value: a.expiresOn > at ? 'Live' : 'Expired', valueLabel: a.expiresOn > at ? `expires ${fmtDate(a.expiresOn)}` : fmtDate(a.expiresOn),
         meta: [a.kindLabel, a.program, `${a.shipments.length} shipments recorded`],
-        owner: a.analyst, onsetOn: a.issuedOn, cite: a.regime === 'ITAR' ? '22 CFR 122.5' : '15 CFR 762', view: 'auth', focus: a.id,
+        owner: a.analyst, onsetOn: a.issuedOn, cite: citeFor(a, { itar: '22 CFR 122.5', ear: '15 CFR 762.2' }), view: 'auth', focus: a.id,
       })),
   },
   {
@@ -1882,25 +2260,33 @@ const RULES = [
         why: `This part is controlled on the U.S. Munitions List with no written basis retained for the determination. An unsupported determination does not survive an audit, and it cannot be defended or re-used when the part is re-reviewed.`,
         value: p.controlCode, valueLabel: 'USML category',
         meta: [p.nomenclature, p.program, `${p.method}, ${fmtDate(p.determinedOn)}`],
-        owner: p.analyst, onsetOn: p.determinedOn, cite: '22 CFR 122.5', view: 'class', focus: p.partNumber,
+        owner: p.analyst, onsetOn: p.determinedOn,
+        cite: 'Policy: written basis retained for every determination', view: 'class', focus: p.partNumber,
       })),
   },
   {
     key: 'control-test-overdue',
     severity: 'serious',
     name: 'Control not tested within its own frequency',
+    /* Automated controls are exempt because they test continuously — but only
+       while their measure resolves. One that does not is not testing anything,
+       and exempting it from this rule was the last of the four places a typo
+       could hide. The exemption now follows the result, not the method. */
     run: (s, at) => (s.controls || [])
-      .filter((c) => c.method !== 'Automated')
       .map((c) => ({ c, r: controlResult(c, s, at) }))
-      .filter((x) => x.r.staleDays > 0)
+      .filter((x) => (x.c.method !== 'Automated' || x.r.unresolved) && x.r.staleDays > 0)
       .map(({ c, r }) => ({
         subject: c.id,
-        title: c.lastTestedOn
-          ? `${c.id} — ${c.frequency.toLowerCase()} control test ${fmtInt(r.staleDays)} days late`
-          : `${c.id} — control has never been tested`,
-        why: `${c.sopTitle} sets a ${c.frequency.toLowerCase()} test on this step, and it was ${c.lastTestedOn ? `last run ${fmtDate(c.lastTestedOn)}` : 'never run'}. An untested control is not a control: nothing is known about whether the procedure is being followed, and the absence of a test is itself the audit finding.`,
-        value: c.lastTestedOn ? `${fmtInt(r.staleDays)} days` : 'Never',
-        valueLabel: c.lastTestedOn ? 'past due' : 'tested',
+        title: r.unresolved
+          ? `${c.id} — automated control is not producing a result`
+          : c.lastTestedOn
+            ? `${c.id} — ${c.frequency.toLowerCase()} control test ${fmtInt(r.staleDays)} days late`
+            : `${c.id} — control has never been tested`,
+        why: r.unresolved
+          ? `${c.sopTitle} tests this step automatically against the measure "${c.measure}", and that measure does not resolve, so the control has produced no result at all. It is reporting neither a pass nor a failure, and it carries no weight in the conformance figure — an untested control wearing the label of a continuous one.`
+          : `${c.sopTitle} sets a ${c.frequency.toLowerCase()} test on this step, and it was ${c.lastTestedOn ? `last run ${fmtDate(c.lastTestedOn)}` : 'never run'}. An untested control is not a control: nothing is known about whether the procedure is being followed, and the absence of a test is itself the audit finding.`,
+        value: r.unresolved ? 'No result' : c.lastTestedOn ? `${fmtInt(r.staleDays)} days` : 'Never',
+        valueLabel: r.unresolved ? 'from a continuous control' : c.lastTestedOn ? 'past due' : 'tested',
         meta: [c.sop, c.frequency, c.method, c.step],
         owner: c.owner,
         onsetOn: c.lastTestedOn ? addDays(c.lastTestedOn, FREQUENCY_DAYS[c.frequency] || 365) : addDays(at, -400),
@@ -1913,7 +2299,7 @@ const RULES = [
     name: 'Corrective action from a control test past its due date',
     run: (s, at) => (s.controls || [])
       .flatMap((c) => c.findings.map((f) => ({ c, f })))
-      .filter(({ f }) => !f.closedOn && f.dueOn <= at && f.raisedOn <= at)
+      .filter(({ f }) => openFindingAt(f, at) && f.dueOn <= at)
       .map(({ c, f }) => ({
         subject: f.id,
         title: `${f.id} — corrective action ${fmtInt(daysBetween(f.dueOn, at))} days past due`,
@@ -1970,7 +2356,8 @@ const RULES = [
         why: `${open.length} proviso${open.length > 1 ? 's have' : ' has'} no acknowledgement date recorded against this live authorization. The same exposure as a larger gap, at lower volume — the condition binds regardless.`,
         value: `${open.length}`, valueLabel: `of ${a.provisos.length} provisos`,
         meta: [a.kindLabel, a.program, `Issued ${fmtDate(a.issuedOn)}`],
-        owner: a.analyst, onsetOn: a.issuedOn, cite: '22 CFR 127.1', view: 'auth', focus: a.id,
+        owner: a.analyst, onsetOn: a.issuedOn,
+        cite: 'Policy: acknowledge provisos before shipment', view: 'auth', focus: a.id,
       })),
   },
 ];
@@ -2589,7 +2976,17 @@ const STATE = { view: 'posture', program: 'all', site: 'all', regime: 'all', que
 /* Assignment and clearing are held in this browser session only — there is no
    back end to write to, and pretending otherwise would be the one dishonest
    thing on the page. The UI says so, next to the controls. */
-const WORKFLOW = { cleared: new Set(), reassigned: new Map() };
+/* Dispositions an action can be cleared under. A free-text box would be worse
+   than useless here: the point of a reason code is that it is countable. */
+const CLEAR_REASONS = [
+  'Remediated — evidence filed',
+  'Not applicable — record error',
+  'Risk accepted — empowered official approved',
+  'Duplicate of another action',
+  'Deferred — awaiting a third party',
+  'Referred to trade counsel',
+];
+const WORKFLOW = { cleared: new Map(), reassigned: new Map() };
 const ANALYST_ROSTER = [...new Set([
   ...DATA.authorizations.map((a) => a.analyst),
   ...DATA.classifications.map((p) => p.analyst),
@@ -2611,10 +3008,9 @@ function currentSlice() {
   const keepPart = (p) =>
     (STATE.program === 'all' || p.program === STATE.program) &&
     (STATE.site === 'all' || p.site === STATE.site) &&
-    /* A part's regime is its determination. Undetermined parts have no regime,
-       so they survive an ITAR/EAR filter only when no regime filter is set —
-       otherwise a filtered coverage figure would quietly hide the backlog. */
-    (STATE.regime === 'all' || p.jurisdiction === STATE.regime);
+    /* Never the bare determination — see partInRegime. An undetermined part
+       has to survive every regime filter, or filtering deletes the backlog. */
+    partInRegime(p, STATE.regime);
   return {
     authorizations: DATA.authorizations.filter(keepAuth),
     classifications: DATA.classifications.filter(keepPart),
@@ -2834,11 +3230,32 @@ function renderPosture(host, slice) {
       });
       act.appendChild(html('span', { class: 'muted', text: 'Owner' }));
       act.appendChild(sel);
-      act.appendChild(html('button', {
+      /* Clearing an action used to be an unlogged, unreasoned deletion: the row
+         vanished and nothing recorded that anyone had decided anything. In a
+         compliance tool the disposition is the part worth keeping — an auditor
+         asks why an action was closed far more often than whether it was — so
+         a reason is required before the button does anything, and the decision
+         is written to a session log that is visible on the page. */
+      const why = html('select', { class: 'reason', 'aria-label': `Reason for clearing ${it.subject}` });
+      why.appendChild(html('option', { value: '', text: 'Reason…' }));
+      for (const r of CLEAR_REASONS) why.appendChild(html('option', { value: r, text: r }));
+      act.appendChild(html('span', { class: 'muted', text: 'Disposition' }));
+      act.appendChild(why);
+      const clearBtn = html('button', {
         class: 'btn btn-sm', type: 'button', text: 'Clear action',
         'aria-label': `Clear ${it.subject} from the queue`,
-        onclick: () => { WORKFLOW.cleared.add(it.actionId); render(); },
-      }));
+        disabled: true,
+        onclick: () => {
+          if (!why.value) return;
+          WORKFLOW.cleared.set(it.actionId, {
+            subject: it.subject, title: it.title, severity: it.severity,
+            reason: why.value, owner: it.owner, at: new Date(),
+          });
+          render();
+        },
+      });
+      why.addEventListener('change', () => { clearBtn.disabled = !why.value; });
+      act.appendChild(clearBtn);
       row.appendChild(act);
       queueCard.appendChild(row);
     }
@@ -2863,16 +3280,25 @@ function renderPosture(host, slice) {
     }
   }
   if (WORKFLOW.cleared.size) {
-    queueCard.appendChild(html('div', { class: 'queue-more' }, [
+    const log = html('div', { class: 'queue-more' }, [
       html('p', {
         class: 'muted', style: 'font-size:12px; margin-bottom:8px',
-        text: `${fmtInt(WORKFLOW.cleared.size)} action${WORKFLOW.cleared.size === 1 ? '' : 's'} cleared in this browser session. Nothing was written back — a reload restores them.`,
+        text: `${fmtInt(WORKFLOW.cleared.size)} action${WORKFLOW.cleared.size === 1 ? '' : 's'} cleared in this browser session, with the disposition recorded against each. Nothing was written back — a reload restores them. In a real deployment this is the log an auditor reads first.`,
       }),
-      html('button', {
-        class: 'btn', type: 'button', text: 'Restore cleared actions',
-        onclick: () => { WORKFLOW.cleared.clear(); render(); },
-      }),
-    ]));
+    ]);
+    const ul = html('ul', { class: 'clearlog' });
+    for (const [, rec] of WORKFLOW.cleared) {
+      ul.appendChild(html('li', {}, [
+        html('span', { class: 'ref', text: SEVERITY_META[rec.severity].icon }),
+        html('span', { text: `${rec.subject} — ${rec.reason}, by ${rec.owner} at ${fmtTime(rec.at)}` }),
+      ]));
+    }
+    log.appendChild(ul);
+    log.appendChild(html('button', {
+      class: 'btn', type: 'button', text: 'Restore cleared actions',
+      onclick: () => { WORKFLOW.cleared.clear(); render(); },
+    }));
+    queueCard.appendChild(log);
   }
   host.appendChild(queueCard);
 
@@ -3000,7 +3426,7 @@ function renderAuthorizations(host, slice) {
       label: fmtMonYear(m), axis: fmtAxisMonth(m),
       itar: inMonth.filter((a) => a.regime === 'ITAR').length,
       ear: inMonth.filter((a) => a.regime === 'EAR').length,
-      balance: sum(inMonth.filter((a) => a.valueBearing).map((a) => Math.max(0, a.authorizedValueUsd - shippedValue(a)))),
+      balance: sum(inMonth.filter((a) => a.valueBearing).map((a) => Math.max(0, a.authorizedValueUsd - shippedBy(a, AS_OF)))),
       renewed: inMonth.filter((a) => filed.has(a.id)).length,
     };
   });
@@ -3059,7 +3485,7 @@ function renderAuthorizations(host, slice) {
     const inBand = liveUtil.filter((x) => x.u >= b.lo && x.u < b.hi);
     return {
       label: b.label, value: inBand.length, v: b.v,
-      balance: sum(inBand.map((x) => Math.max(0, x.a.authorizedValueUsd - shippedValue(x.a)))),
+      balance: sum(inBand.map((x) => Math.max(0, x.a.authorizedValueUsd - shippedBy(x.a, AS_OF)))),
     };
   });
   const overCount = utilBands[utilBands.length - 1].value;
@@ -3095,7 +3521,7 @@ function renderAuthorizations(host, slice) {
 
   /* ---- 3. Authorized value by destination region ---- */
   const byRegion = [...groupBy(liveValued, (a) => a.region).entries()]
-    .map(([region, as]) => ({ label: region, value: sum(as.map((a) => a.authorizedValueUsd)), n: as.length, shipped: sum(as.map((a) => shippedValue(a))) }))
+    .map(([region, as]) => ({ label: region, value: sum(as.map((a) => a.authorizedValueUsd)), n: as.length, shipped: sum(as.map((a) => shippedBy(a, AS_OF))) }))
     .sort((a, b) => b.value - a.value);
   grid.appendChild(figure({
     title: 'Authorized value by destination region',
@@ -3187,15 +3613,41 @@ function renderAuthorizations(host, slice) {
       kv('Issued', fmtDate(a.issuedOn));
       kv('Expires', fmtDate(a.expiresOn));
       kv('Authorized value', a.valueBearing ? fmtUsdFull(a.authorizedValueUsd) : 'Not value-limited');
-      kv('Shipped to date', a.valueBearing ? fmtUsdFull(shippedValue(a)) : '—');
+      kv('Shipped to date', a.valueBearing ? fmtUsdFull(shippedBy(a, AS_OF)) : '—');
       kv('Supporting records', a.recordsOnFile ? 'On file' : 'Not on file');
       if (a.temporary) kv('Items reconciled', a.itemsReconciledOn ? fmtDate(a.itemsReconciledOn) : 'Not reconciled');
       const replacing = DATA.authorizations.find((x) => x.id === a.renewalOfId);
       if (replacing) kv('Replaces', replacing.id);
       const replacedBy = DATA.authorizations.find((x) => x.renewalOfId === a.id && x.status === 'In adjudication');
       if (replacedBy) kv('Replacement filed', `${replacedBy.id}, ${fmtDate(replacedBy.submittedOn)}`);
-      kv('Item master keys', a.partNumbers.join(', ') || '—');
       box.appendChild(facts);
+
+      /* Line items carry both ceilings, because a licence is exhausted by
+         whichever it reaches first. A line can sit well inside its authorized
+         value and still be over-shipped on quantity, and only showing the two
+         side by side makes that legible. */
+      const cons = new Map(lineConsumption(a, AS_OF).map((c) => [c.line.lineNo, c]));
+      const breaches = new Map(overShippedLines(a, AS_OF).map((c) => [c.line.lineNo, c]));
+      const li = html('div', {}, [html('h4', { text: `Line items (${a.lines.length})` })]);
+      const ll = html('ul');
+      if (!a.lines.length) ll.appendChild(html('li', {}, [html('span', { text: 'No lines recorded.' })]));
+      for (const l of a.lines) {
+        const c = cons.get(l.lineNo);
+        const breach = breaches.get(l.lineNo);
+        const qty = l.qtyAuthorized === null ? 'no quantity ceiling'
+          : `${fmtInt(c.qty)} of ${fmtInt(l.qtyAuthorized)} ${l.uom}`;
+        const val = l.valueAuthorizedUsd === null ? 'no value ceiling'
+          : `${fmtUsd(c.valueUsd)} of ${fmtUsd(l.valueAuthorizedUsd)}`;
+        ll.appendChild(html('li', {}, [
+          html('span', { class: 'ref', text: String(l.lineNo) }),
+          html('span', {}, [
+            html('span', { text: `${l.partNumber} · ${qty} · ${val} ` }),
+            breach ? html('span', { class: 'muted', text: `over ceiling on ${breach.binding}` }) : html('span'),
+          ]),
+        ]));
+      }
+      li.appendChild(ll);
+      box.appendChild(li);
 
       const pv = html('div', {}, [html('h4', { text: `Provisos (${a.provisos.length})` })]);
       const pl = html('ul');
@@ -3219,7 +3671,7 @@ function renderAuthorizations(host, slice) {
         const late = a.expiresOn && s.date > a.expiresOn;
         sl.appendChild(html('li', {}, [
           html('span', { class: 'ref', text: fmtDate(s.date) }),
-          html('span', { text: `${fmtUsdFull(s.valueUsd)} · ${s.ref}${late ? ' · after expiry' : ''}` }),
+          html('span', { text: `${fmtUsdFull(s.valueUsd)} · ${fmtInt(s.qty || 0)} ea · line ${s.lineNo} · ${s.ref}${late ? ' · after expiry' : ''}` }),
         ]));
       }
       sh.appendChild(sl);
@@ -3236,10 +3688,15 @@ function renderAuthorizations(host, slice) {
   }));
 }
 
+/* "Fully consumed" used to be the last word here, and it reads as tidy — the
+   licence did its job. It is the wrong word for a licence that has been shipped
+   past its ceiling, which is a finding rather than a completion, so that case
+   is named separately and the two are never collapsed. */
 function authStatus(a) {
   if (a.status !== 'Issued') return a.status;
   if (a.expiresOn <= AS_OF) return 'Expired';
-  if (a.valueBearing && shippedValue(a) >= a.authorizedValueUsd) return 'Fully consumed';
+  if (overShippedLines(a, AS_OF).length) return 'Over ceiling';
+  if (a.valueBearing && shippedBy(a, AS_OF) >= a.authorizedValueUsd) return 'Fully consumed';
   return 'Live';
 }
 
@@ -3497,7 +3954,7 @@ function renderProcess(host, slice) {
   host.appendChild(grid);
 
   /* ---- Open corrective actions ---- */
-  const open = pc.findings.filter((f) => !f.closedOn).sort((a, b) => a.dueOn - b.dueOn);
+  const open = pc.findings.filter((f) => openFindingAt(f, AS_OF)).sort((a, b) => a.dueOn - b.dueOn);
   host.appendChild(html('div', { class: 'section-head' }, [
     html('p', { class: 'eyebrow', text: 'Remediation' }),
     html('h2', { text: 'Corrective actions' }),
@@ -3711,7 +4168,54 @@ function render() {
   else renderProcess(document.getElementById('view-process'), slice);
 }
 
+/* Three separate mechanisms on this page once turned "we do not know" into
+   "nothing to see": consumption dropped an over-shipped licence out of every
+   rule, the regime filter deleted the classification backlog, and a control
+   whose measure key did not resolve scored zero and excused itself from the
+   overdue test. They were different bugs with one shape — scope narrowing on
+   the strength of the very condition being looked for — so the standing rule
+   is that no record may exit scope silently, and these assertions are what
+   hold it. They run at load and shout in the console rather than failing
+   quietly, because a silent check is the thing they exist to prevent. */
+function selfCheck() {
+  const fail = [];
+  const at = AS_OF;
+
+  for (const c of DATA.controls) {
+    if (c.method === 'Automated' && !AUTOMATED_MEASURES[c.measure]) {
+      fail.push(`control ${c.id} names measure "${c.measure}", which does not exist`);
+    }
+  }
+
+  const backlog = undeterminedParts(DATA.classifications, at).length;
+  if (backlog > 0) {
+    for (const regime of ['ITAR', 'EAR']) {
+      const scoped = DATA.classifications.filter((p) => partInRegime(p, regime));
+      const known = knownParts(scoped, at).length;
+      const done = determinedParts(scoped, at).length;
+      if (known > 0 && done >= known) {
+        fail.push(`regime filter ${regime} reports complete coverage while ${backlog} parts are undetermined`);
+      }
+    }
+  }
+
+  /* An authorization shipped past a ceiling must still be in scope: that is
+     the moment it becomes a finding, and it was the moment it used to vanish. */
+  const overButDropped = DATA.authorizations.filter((a) => isIssuedBy(a, at) && a.expiresOn > at
+    && overShippedLines(a, at).length && !isLive(a, at));
+  if (overButDropped.length) fail.push(`${overButDropped.length} over-shipped authorizations are outside liveAuths`);
+
+  if (fail.length) {
+    console.error('[self-check] ' + fail.length + ' invariant(s) broken:\n  ' + fail.join('\n  '));
+  }
+  return fail;
+}
+
 function boot() {
+  /* Runs here rather than beside AUTOMATED_MEASURES because several measures
+     close over derivations declared further down the file. */
+  seedCapas(DATA, AUTOMATED_MEASURES);
+  selfCheck();
   document.getElementById('asof-chip').textContent = `Extract as of ${fmtDate(AS_OF)}`;
   document.getElementById('note-scope').textContent =
     'Three modules are in scope: authorizations and agreements; jurisdiction and classification; and process compliance, the testing of the written procedures themselves. Deliberately out of scope for this proof of concept, and the obvious next modules: restricted party screening, foreign nationals and deemed exports, AES/EEI filing accuracy, and voluntary disclosure tracking.';

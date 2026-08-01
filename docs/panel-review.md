@@ -235,3 +235,49 @@ The generalisable fix, and the best single sentence to come out of the review:
 > records it excludes somewhere visible, rather than dropping them.
 
 That is a test, not a preference, and it is worth asserting in code.
+
+## What was implemented
+
+The ten corrections above were applied, together with **E1** (line items). The
+enhancements E2–E11 were not — they are capability, not defects, and were left
+as a scope decision.
+
+Two things changed during implementation because the code or the regulation said
+something different from what the panel assumed.
+
+**The over-consumption rule is regime-aware, and the panel's version would have
+over-reported.** Every reviewer treated the ceiling as a single test at 100%.
+That is right under ITAR: 22 CFR 123.21 expires a licence when the total value
+**or** quantity authorized has been shipped, whichever comes first, with no
+tolerance. It is wrong under EAR. 15 CFR 750.7(f) limits the licence by both
+quantity and value *subject to the shipping tolerances at 15 CFR 750.11*, and
+750.11(b) permits total value to run up to 10% over the licensed dollar value so
+long as the full approved quantity has not shipped. A rule flagging a BIS licence
+at 100.1% of value would report as a breach something the regulation expressly
+allows. The implemented rule applies the tolerance under EAR, withdraws it once
+quantity is exhausted, and applies none under ITAR.
+
+**The presumptive-regime fix for the filter was wrong and the self-check caught
+it.** The classification lead proposed attributing an undetermined part to the
+regime of its program's authorizations. Implemented, that moved the problem
+rather than fixing it: nearly every program in this portfolio is majority ITAR,
+so all 115 undetermined parts landed in ITAR and the EAR filter went back to
+reading exactly 100.0%. Undetermined parts now survive both filters instead. The
+cost is that the two filtered views overlap rather than partition, which is
+stated on the page.
+
+### Left undone, and worth knowing
+
+- **Conformance is still item-weighted.** All six reviewers rejected this, and
+  they were the most united on it of anything they looked at. It falls under E8
+  and was out of the agreed scope, so the figure and its footnote are unchanged.
+  This is the largest single gap between what the panel recommended and what the
+  page now does.
+- **The critical half of the ITAR-on-EAR split rule has no members.** Only 21 of
+  398 authorizations are BIS licences, so the condition stays rare at any
+  plausible seeding rate. The rule is correct; the demonstration data is
+  ITAR-heavy by design. Raising the rate far enough to force members would have
+  manufactured the finding, which is the failure this whole review was about.
+- **The two-clock onset model is not implemented**, for the reason the systems
+  lead gave: with no persistence there is no honest way to derive a detection
+  date. The README states the position rather than leaving it implied.

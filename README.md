@@ -124,16 +124,18 @@ entered the item master.
 
 | Severity | Rule | Why it fires |
 |---|---|---|
-| Critical | Temporary authorization expired with items not reconciled as returned | Items abroad past expiry are outside an authorization until reconciled or re-authorized |
-| Critical | Shipment recorded after authorization expiry | Assess against the voluntary disclosure decision, 22 CFR 127.12 |
-| Critical | Part determined ITAR named on an EAR authorization | A USML article moves on State Department authorization; shipping one against a BIS licence is an export made without the approval it required |
+| Critical | Shipped past the value or quantity the authorization allows | An ITAR licence expires on whichever ceiling it reaches first (22 CFR 123.21); an EAR licence is limited by both, subject to the shipping tolerances at 15 CFR 750.11 |
+| Critical | Temporary authorization expired with items not reconciled as returned | No return reconciliation is recorded and no approval is linked |
+| Critical | Shipment recorded after authorization expiry | Shipments carry dates after the expiration date; what covered them is not established in the record |
+| Critical | Part determined ITAR shipped against an EAR authorization | Shipments are recorded on a line whose part carries an ITAR determination of record, dated on or after that determination |
+| Serious | Part determined ITAR listed on an EAR authorization | The listing and the determination of record disagree, and nothing has moved on that line yet |
 | Serious | Part with no determination named on a live authorization | The authorization asserts what the item is; nobody has decided |
 | Serious | Authorization expiring with no replacement application filed | Renewal lead time is weeks for a licence and months for an agreement — the decision needed making long before the expiry date |
 | Serious | Control not tested within its own frequency | An untested control is not a control; the absence of a test is itself the finding |
 | Serious | Corrective action past its committed date | The deficiency is now documented and unremediated |
 | Serious | Authorized value >85% consumed with >6 months of term remaining | The value will run out long before the authorization does, and an amendment takes longer to obtain than the balance will cover |
 | Serious | 3+ provisos not acknowledged on a live authorization | The most common finding in a licensing audit |
-| Serious | Supporting records not on file | Five-year retention applies, 22 CFR 122.5 and 15 CFR 762 |
+| Serious | Supporting records not on file | Five-year retention applies, 22 CFR 122.5 and 15 CFR 762.2 |
 | Serious | Part in the item master 90+ days without a determination | Blocks shipment, quoting, and foreign-national disclosure decisions |
 | Serious | ITAR determination with no written basis retained | An unsupported determination does not survive an audit |
 | Watch | Determination past its re-review date | Control lists and configurations move; a stale determination becomes the wrong one |
@@ -142,7 +144,7 @@ entered the item master.
 
 Severity orders the queue, but within a tier the rule kinds are dealt out
 round-robin — one rule matching forty records would otherwise fill the visible
-queue and bury the other fourteen.
+queue and bury the other sixteen.
 
 The queue is truncated by default, but **never across the critical tier**: the
 default view always runs to the end of critical and a few rows into the next
@@ -158,10 +160,28 @@ setting — never a bare assertion. The citations in use:
 | Reference | Used for |
 |---|---|
 | 22 CFR 123.5 | Temporary export licences (DSP-73) and the obligation to return the items |
-| 22 CFR 127.1 | Violations, including failing to comply with the terms or conditions of a licence — the basis for the proviso rules |
-| 22 CFR 127.12 | Voluntary disclosure |
-| 22 CFR 122.5 | ITAR recordkeeping, five years — supporting records and the retained basis for a determination |
-| 15 CFR 762 | EAR recordkeeping, five years |
+| 22 CFR 123.21 | Duration of an ITAR licence — it expires when the total value **or** quantity authorized has been shipped, or on the expiration date, whichever comes first |
+| 22 CFR 120.11 | The U.S. Munitions List, where a part's determination of record disagrees with the authorization it is listed on |
+| 22 CFR 122.5 | ITAR recordkeeping, five years |
+| 15 CFR 750.7 | EAR licence issuance and validity period |
+| 15 CFR 750.7(f), 750.11 | An EAR licence is limited by both quantity and value, subject to shipping tolerances — where the full quantity has not shipped, value may run up to 10% over |
+| 15 CFR 762.2 | EAR records to be retained |
+
+**A citation travels with the regime of the record it sits on.** Nothing cites an
+ITAR provision on a BIS licence or the reverse; the rules that run across both
+resolve their citation from `a.regime` through one helper, `citeFor`. An earlier
+draft hardcoded 22 CFR 127.12 on the after-expiry rule, which has no regime
+test, so EAR rows carried an ITAR voluntary-disclosure citation. That is worse
+than an uncited row: it is a specific claim about which law applies, made by a
+tool, in a record somebody reads back later without the tool there to qualify
+it.
+
+Two citations were removed rather than corrected. 22 CFR 127.1 no longer appears
+on the proviso rules: an unacknowledged proviso is an internal control gap, not
+in itself a violation, and the rule also ran over EAR authorizations. 22 CFR
+122.5 no longer backs the written-basis rule: it is a records-retention
+provision, not the source of an obligation to reason about jurisdiction. Both
+are now `Policy:` settings, which is what they always were.
 
 Everything else the queue raises is a `Policy:` setting, shown as such on the
 row. Citations locate the obligation; **they are not legal advice**, and the
@@ -182,12 +202,34 @@ modules actually hold.
 
 Every action carries the analyst who owns it and the date it fell due. The due
 date is derived, not assigned: each rule reports the date its condition actually
-became true — the expiry date, the shipment that broke the licence, the date
-cumulative shipped value crossed 85% — and the remediation window for its
-severity is added to that. A finding cannot be made to look fresh by being
+became true — the expiry date, the shipment that took a line past its ceiling,
+the date cumulative shipped value crossed 85% — and the remediation window for
+its severity is added to that. A finding cannot be made to look fresh by being
 discovered late.
 
+The onset date is the date the condition arose, and deliberately not the date
+anyone first saw it. Splitting the two — running the remediation clock from
+detection rather than from onset — is a fair criticism of this design, and it is
+not implemented here for a specific reason: this page recomputes every rule from
+scratch on load and has no persistence, so a detection date would be a property
+of a snapshot series that does not exist. With one snapshot it is the extract
+date for everything, which is worse than not having it. Detection dating is a
+snapshot-store feature, and it arrives free the day monthly snapshots do.
+
+One rule was previously dated so that it was born overdue: the renewal rule
+fires at 90 days to expiry but dated its onset to the 120-day lead time, then
+added a 30-day window — so every one of them was due on the day it first
+appeared. Onset for that rule is now the day the condition becomes visible.
+
 Actions can be **reassigned to another analyst** and **cleared from the queue**.
+Clearing requires a disposition — remediated, not applicable, risk accepted,
+duplicate, deferred, referred to counsel — and the button stays disabled until
+one is chosen. Each clearance is written to a visible session log with its
+reason, owner and time. An earlier draft let the row simply vanish, which in a
+compliance tool is the wrong default twice over: an auditor asks why an action
+was closed far more often than whether it was, and a free-text box would not
+have helped because the point of a reason code is that it is countable.
+
 Both are held in the browser session only: there is no system of record behind
 this page, and a reload restores everything. The page says so next to the
 controls rather than leaving it to be discovered.
@@ -212,8 +254,31 @@ The mock data layer is fenced inside `index.html` by a single comment block:
 It exposes exactly one object:
 
 ```js
-DATA = { asOf: Date, authorizations: Authorization[], classifications: Part[] }
+DATA = {
+  asOf: Date,
+  authorizations: Authorization[],
+  classifications: Part[],
+  controls: Control[],
+}
 ```
+
+An authorization carries **line items**, not a flat list of part numbers. Each
+line has its own quantity and value ceiling, and each shipment names the line it
+moved on and the quantity it took:
+
+```js
+lines:     [{ lineNo, partNumber, uom, qtyAuthorized, valueAuthorizedUsd }]
+shipments: [{ date, lineNo, qty, valueUsd, ref }]
+```
+
+This is the one structural thing a real feed has to supply that a simpler model
+does not, and it is load-bearing: under 22 CFR 123.21 a licence is exhausted by
+whichever ceiling it reaches first, so a line can sit comfortably inside its
+authorized value and still be over-shipped on quantity. A model that tracks only
+value cannot ask the question, and the ceiling that binds is routinely the one it
+is not watching. Agreements name articles without authorizing a quantity, so
+their ceilings are `null` — an agreement is bound by its term and its scope, not
+by a number it never carried.
 
 Both record schemas are documented in full in the comment block directly above
 the generators — that comment is the integration contract. Point `DATA` at a
@@ -247,12 +312,26 @@ destination patterns being right — none of which needs a real name.
 These are the places where the obvious data model would produce a number a
 trade compliance professional does not recognise:
 
-- **Agreements do not burn value.** A TAA and an MLA authorize defense services
-  and technical data; the hardware supporting them moves on its own licences.
+- **Agreements do not burn value.** A TAA, an MLA and a WDA are all Part 124
+  agreements: they authorize an arrangement — defense services, technical data,
+  a distribution territory — and the hardware moves on DSP-5s that cite them.
   They carry no value ceiling, so utilization, the amendment threshold and the
-  value-by-region roll-up all skip them — showing a TAA at "62% consumed" is
-  the fastest way to lose a subject-matter audience. Provisos, records and
-  expiry still apply, and that is where agreements actually generate work.
+  value-by-region roll-up all skip them; showing a TAA at "62% consumed" is the
+  fastest way to lose a subject-matter audience. Provisos, records and expiry
+  still apply, and that is where agreements actually generate work.
+  The WDA was marked value-bearing in an earlier draft, which double-counted its
+  value in the region roll-up and invented a consumption figure for a ceiling it
+  never had.
+- **An undetermined part belongs to both regime filters.** A part's regime is
+  the outcome of a determination, so scoping the item master on that outcome
+  deleted the backlog the moment anyone filtered. Guessing a presumptive regime
+  from the program's other authorizations reads as more precise and is worse:
+  nearly every program here is majority ITAR, so the guess simply emptied the
+  EAR backlog instead of the ITAR one and the same reassuring 100.0% came back
+  under a different filter. Undetermined parts now appear under both. The cost
+  is that the two filtered views overlap rather than partition, which the
+  classification view says on its face — a ratio that is honest about what it
+  cannot yet place beats a partition that is tidy and wrong.
 - **The parts named on an authorization follow its regime.** A BIS licence
   lists EAR items, a DSP-5 lists USML items. Drawn at random, roughly half of
   every EAR licence's parts would be USML and the cross-module check would fire
@@ -306,8 +385,53 @@ because uniform draws produce charts that quietly contradict what they claim:
   chart is a genuine roll-up rather than a relabelling — which is what its
   footnote claims it is.
 
-Utilization above 100% appears only where value was shipped against an
-authorization that had none left — a condition the rules flag.
+- **A minority of live authorizations are shipped past a ceiling**, and some
+  lines carry an approved quantity that buys less than the approved value, so
+  quantity binds before value does. Both are planted deliberately: a control
+  with nothing to find looks exactly like a control that does not work, and the
+  only way to tell them apart is to put the condition in the data and watch the
+  rule catch it.
+- **Shipments vary in size but none of them dominates its licence.** Drawing
+  each as a fixed fraction of what is left makes the first shipment enormous and
+  the last trivial, which put roughly a quarter of the portfolio over a line
+  ceiling through nothing but variance. A finding that common is not a finding.
+
+Two rates in the generator are set to make a rule demonstrable rather than to
+model reality, and neither should be read as a claim about frequency: shipments
+recorded after expiry, and parts determined ITAR listed on a BIS licence. The
+second is rare here whatever rate is used, because this portfolio is ITAR-heavy
+by design — 21 of 398 authorizations are BIS licences — so **the critical half
+of the ITAR-on-EAR split rule may have no members in any given extract**. That
+is a property of the demonstration data, not of the rule.
+
+### No record may exit scope silently
+
+Three separate mechanisms in an earlier draft turned *we do not know* into
+*nothing to see*, and they are worth naming because they were the same bug
+wearing three faces — scope narrowing on the strength of the very condition
+being looked for.
+
+- **Consumption was part of the live test.** An authorization shipped past its
+  ceiling dropped out of `liveAuths`, and therefore out of every rule and every
+  measure, at exactly the moment it became a finding. It then surfaced as
+  "Fully consumed", which reads as tidy. Consumption is no longer part of that
+  test, over-consumption is its own critical rule, and the status label
+  distinguishes a licence that was used up from one that was overrun.
+- **The regime filter scoped parts on their determination.** An undetermined
+  part has no regime, so filtering to ITAR or EAR deleted precisely the
+  population the coverage metric exists to count: coverage read exactly 100.0%
+  and the backlog read zero, one click from the default view. Undetermined parts
+  now survive every regime filter.
+- **An unresolvable measure key scored zero and excused itself.** A typo in a
+  control's `measure` produced a population of zero, an em-dash conformance, no
+  weight in the roll-up and — because the overdue rule skipped automated
+  controls — no overdue finding either. Four places where a typo looked like
+  health. It is now its own state, and the overdue exemption follows the result
+  rather than the method.
+
+A `selfCheck()` runs at load and writes to the console if any of the three comes
+back. It is deliberately noisy: a silent check is the thing it exists to
+prevent.
 
 ## Design and accessibility notes
 
