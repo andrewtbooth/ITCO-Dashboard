@@ -21,7 +21,7 @@ works from a local copy, an email attachment or a disconnected machine.
 
 ## What it covers
 
-Five modules, one queue.
+Six modules, one queue.
 
 - **Authorizations and agreements** — licences and Part 124 agreements, their
   line items, provisos, shipments, renewals and consumption against both
@@ -34,8 +34,10 @@ Five modules, one queue.
   company abroad, what they are paid, and when anybody last looked at them.
 - **Process compliance** — whether the written procedure is the procedure being
   followed.
+- **Voluntary disclosures** — findings that may need reporting, from discovery
+  through initial notification to the full account, on each regime's own clock.
 
-## The six views
+## The seven views
 
 **Posture** opens with the count of open compliance actions, six KPI tiles each
 carrying a 12-month trend, and a prioritized *Needs attention* queue. Every row
@@ -156,6 +158,76 @@ diligence asks who a party is, screening asks whether a government has already
 said no, and a screen is a statement about a date rather than a permanent
 clearance.
 
+### Control conclusions, not a conformance percentage
+
+The single pooled conformance figure is gone. Every reviewer on the practitioner
+panel rejected it, and they were more united on this than on anything else they
+looked at: item-weighting put shipments, parts and agreements into one
+denominator nobody could name, and weighting each control equally would have let
+a 20-item sample outvote a 4,000-record population test.
+
+Each control now carries its own **tolerable deviation rate** — a documented
+policy figure per control, not a draw, because a screening step and a filing step
+do not have the same acceptable error rate. Two steps are zero-tolerance: nothing
+ships against an expired authorization, and the jurisdiction of what ships
+matches the licence it ships under. Those exceptions are counted, never averaged.
+
+Each control is then concluded:
+
+| Conclusion | When |
+| --- | --- |
+| **Effective** | Deviation rate within tolerance, on evidence that supports it |
+| **Not effective** | Rate above tolerance, or any deviation on a zero-tolerance step |
+| **Insufficient evidence** | Nothing tested, no valid result, or a sample too small to support the tolerance |
+
+That last row is the one that matters. Attribute sampling needs
+`n ≥ ln(1 − confidence) / ln(1 − TDR)` — **59 items** at a 5% tolerance and 95%
+confidence, 149 at 2%. A 20-item sample cannot conclude a control effective at
+5%, however clean it comes back, and reporting it as effective anyway is the
+quiet way an audit file asserts more than its own evidence supports.
+
+Testing coverage is reported **per control as a range**, never blended, so a
+reader can see that one control examined 4.5% of its population and another
+100%.
+
+### Screening reaches the people it is about
+
+Restricted-party screening covered third-party intermediaries and nothing else.
+End users and consignees — the parties actually named on the face of a licence,
+and precisely who a denied-party list is about — were stored and screened by
+nothing. Storing screening-relevant data and not screening it is worse than not
+holding it, because it evidences a capability the programme was not using.
+
+Foreign parties now carry their own `lastScreenedOn` and `screenHit`, with the
+same 365-day cycle as the intermediary register and their own rules. Screening
+is kept as a distinct question from due diligence throughout: diligence asks who
+a party is, screening asks whether a government has already said no.
+
+### Voluntary disclosures, on two different clocks
+
+The queue routed findings toward a disclosure decision and had nowhere to route
+them to. An assessment with no register behind it is a decision nobody can show
+they made.
+
+The two regimes are never collapsed into one field, because they differ in both
+length and consequence:
+
+| | Window | What missing it costs |
+| --- | --- | --- |
+| **ITAR** — 22 CFR 127.12(c)(2) | **60 calendar days** from the initial notification | DDTC will not deem the notification to qualify as a voluntary disclosure |
+| **EAR** — 15 CFR 764.5 | **180 days** for the narrative account | Expressly *not* a further violation of the EAR; it may reduce or eliminate the mitigating weight |
+
+Extensions are modelled, because an extension moves the date the clock runs to.
+Both regimes are deliberately represented in the register and `selfCheck()`
+asserts it — drawing subjects from the portfolio at large would have produced an
+almost entirely ITAR register, since only 21 of 393 authorizations are BIS
+licences, and a register showing one clock demonstrates nothing about two.
+
+**Privilege is recorded and never reproduced.** Where a matter is
+counsel-directed the page says so and stops. A compliance tool that copies legal
+analysis into a reporting layer is how privilege gets waived by an operations
+team that never knew it held any.
+
 ## Metric definitions
 
 | Metric | Definition |
@@ -195,7 +267,11 @@ entered the item master.
 | Serious | Control not tested within its own frequency | An untested control is not a control; the absence of a test is itself the finding |
 | Serious | Corrective action past its committed date | The deficiency is now documented and unremediated |
 | Serious | Authorized value >85% consumed with >6 months of term remaining | The value will run out long before the authorization does, and an amendment takes longer to obtain than the balance will cover |
+| Critical | Full disclosure not submitted within the regime window | ITAR 60 calendar days or the notification is not deemed voluntary; EAR 180 days or the mitigating weight is reduced |
+| Critical | Screening match on an end user or consignee named on a live authorization | The parties on the face of the licence are who a denied-party list is about |
 | Critical | Unresolved restricted-party screening match on an engaged third party | A government has already said no to somebody; payments and shipments should hold until the match is cleared or confirmed |
+| Serious | End user or consignee on a live authorization not screened within the cycle | Lists change continuously, so a screen states a date rather than a clearance |
+| Serious | Potential disclosure under assessment with no decision recorded | Either outcome is defensible; an open assessment with no conclusion is not |
 | Critical | Red flag recorded on an engaged third party | A red flag is a fact requiring assessment, not a conclusion — the absence of a recorded assessment is what an enforcement review finds |
 | Serious | Third-party due diligence not refreshed within its cycle | Without a current file the company cannot show what it knew or when |
 | Serious | Third party not screened within the screening cycle | Lists change continuously, so a screen is a statement about a date |
@@ -213,7 +289,7 @@ entered the item master.
 
 Severity orders the queue, but within a tier the rule kinds are dealt out
 round-robin — one rule matching forty records would otherwise fill the visible
-queue and bury the other twenty-four.
+queue and bury the other twenty-eight.
 
 The queue is truncated by default, but **never across the critical tier**: the
 default view always runs to the end of critical and a few rows into the next
@@ -237,6 +313,8 @@ setting — never a bare assertion. The citations in use:
 | 15 CFR 762.2 | EAR records to be retained |
 | 15 U.S.C. 78dd-1 | FCPA anti-bribery provisions — the basis for the red-flag rule |
 | 15 U.S.C. 78m(b)(2) | FCPA books and records — the basis for the commission rule |
+| 22 CFR 127.12(c)(2) | ITAR voluntary disclosure — 60 calendar days for the full disclosure |
+| 15 CFR 764.5 | EAR voluntary self-disclosure — 180 days for the narrative account |
 
 **A citation travels with the regime of the record it sits on.** Nothing cites an
 ITAR provision on a BIS licence or the reverse; the rules that run across both
@@ -264,12 +342,11 @@ re-review cycle as its own constant, `REVIEW_CYCLE_YEARS`.
 
 ### What the rules deliberately do not do
 
-There is no rule for deemed exports, AES/EEI filing accuracy, or voluntary
-disclosure tracking, because those modules are out of scope and a rule that
-half-checks them would be worse than none. Restricted-party screening is now
-modelled, but only for third-party intermediaries — end users and consignees are
-stored and not yet screened, and that gap is named here rather than left to be
-discovered. Every rule runs on data an in-scope module actually holds.
+There is no rule for deemed exports or AES/EEI filing accuracy, because those
+modules are out of scope and a rule that half-checks them would be worse than
+none. Screening now covers both intermediaries and the end users and consignees
+named on authorizations. Every rule runs on data an in-scope module actually
+holds.
 
 ## Working the queue
 
@@ -335,6 +412,7 @@ DATA = {
   pursuits: Pursuit[],          // international opportunities
   intermediaries: ThirdParty[], // anti-corruption
   giftsLog: GiftEntry[],        // gifts, hospitality, contributions
+  disclosures: Disclosure[],    // voluntary disclosure pipeline
 }
 ```
 

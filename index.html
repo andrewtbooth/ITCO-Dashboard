@@ -795,6 +795,7 @@ tr.row-focus > td {
       <button class="tab" role="tab" id="tab-pursuits" aria-controls="view-pursuits" aria-selected="false" type="button">Pursuits &amp; programs</button>
       <button class="tab" role="tab" id="tab-anticorruption" aria-controls="view-anticorruption" aria-selected="false" type="button">Anti-corruption</button>
       <button class="tab" role="tab" id="tab-process" aria-controls="view-process" aria-selected="false" type="button">Process compliance</button>
+      <button class="tab" role="tab" id="tab-disclosures" aria-controls="view-disclosures" aria-selected="false" type="button">Disclosures</button>
     </div>
     <div class="filters" id="filters">
       <label class="field"><span>Program</span><select id="f-program"></select></label>
@@ -813,6 +814,7 @@ tr.row-focus > td {
   <section id="view-pursuits" role="tabpanel" aria-labelledby="tab-pursuits" hidden></section>
   <section id="view-anticorruption" role="tabpanel" aria-labelledby="tab-anticorruption" hidden></section>
   <section id="view-process" role="tabpanel" aria-labelledby="tab-process" hidden></section>
+  <section id="view-disclosures" role="tabpanel" aria-labelledby="tab-disclosures" hidden></section>
 
   <div class="notes">
     <h2>Notes</h2>
@@ -954,7 +956,15 @@ function groupBy(xs, key) {
                                   authorization; null when !valueBearing
      destinations        string[] destination countries
      region              string   destination region, for the value-by-region roll-up
-     foreignParties      [{ name: string, role: string, country: string }]
+     foreignParties      [{ name: string, role: string, country: string,
+                                   lastScreenedOn: Date|null, screenHit: boolean }]
+                                  End users and consignees named on the face of
+                                  the authorization, with their own screening
+                                  state. Screening asks whether a government
+                                  has already said no, and it is a statement
+                                  about a date rather than a permanent
+                                  clearance — so it carries its own clock,
+                                  separate from third-party due diligence.
      provisos            [{ ref: string, text: string, acknowledgedOn: Date|null }]
                                   acknowledgedOn === null means "not acknowledged"
      shipments           [{ date: Date, lineNo: number, qty: number,
@@ -1429,8 +1439,21 @@ const DATA = (function buildMockData() {
       ? Math.round(Math.exp(13.2 + gauss() * 1.25) / 1000) * 1000 + 40000
       : null;
 
+    /* Foreign parties carry their own screening state. They were stored and
+       screened by nothing at all — which is worse than not storing them,
+       because it evidences a capability the programme was not using. An end
+       user or consignee is exactly who a restricted-party list is about, and
+       the intermediary register was until now the only place anything got
+       screened. Screening is a statement about a date, so it has a clock. */
     const foreignParties = sample(PARTIES, int(1, 3)).map((name, idx) => ({
       name, role: idx === 0 ? 'End-user' : pick(PARTY_ROLES), country: pick(destinations),
+      /* Rates kept low on purpose. Roughly 580 parties are named across the
+         live portfolio, so a lapse rate that looks modest per party produces
+         a rule that fires on a third of the book and drowns the queue — the
+         same trap as every other "overdue" on this page. */
+      lastScreenedOn: chance(0.02) ? null
+        : addDays(asOf, -(chance(0.045) ? int(375, 700) : int(1, 350))),
+      screenHit: chance(0.008),
     }));
 
     /* Line items. An authorization names articles, and under 22 CFR 123.21 a
@@ -1636,24 +1659,33 @@ const DATA = (function buildMockData() {
     { sop: 'SOP-19', sopTitle: 'Temporary exports and reconciliation' },
     { sop: 'SOP-22', sopTitle: 'Training and awareness' },
   ];
+  /* The last field is the control's TOLERABLE DEVIATION RATE — the rate at
+     which the step is still considered to be working. It is a documented
+     policy choice per control, not a draw: a screening step and a filing step
+     do not have the same acceptable error rate, and a programme that cannot
+     say what its tolerance is cannot say whether a control passed.
+     0 means zero tolerance: one deviation is a finding. Reserved here for the
+     two steps where that is genuinely true — nothing ships against an expired
+     authorization, and the jurisdiction of what ships matches the licence it
+     ships under. */
   const CONTROL_SPECS = [
-    ['SOP-03.1', 'SOP-03', 'Every part entering the item master receives a jurisdiction and classification determination within the service level.', 'Automated', 'Continuous', 'classification-sla'],
-    ['SOP-03.2', 'SOP-03', 'Every ITAR determination retains a written basis that can be produced on request.', 'Automated', 'Continuous', 'itar-basis'],
-    ['SOP-03.3', 'SOP-03', 'Determinations of record are re-reviewed on the published cycle.', 'Automated', 'Continuous', 'review-cycle'],
-    ['SOP-03.4', 'SOP-03', 'The determination method and the analyst of record are recorded against every determination.', 'Manual sample', 'Quarterly', null],
-    ['SOP-07.1', 'SOP-07', 'Provisos are acknowledged and dated before the first shipment under the authorization.', 'Automated', 'Continuous', 'proviso-ack'],
-    ['SOP-07.2', 'SOP-07', 'A replacement application is filed ahead of the published renewal lead time.', 'Automated', 'Continuous', 'renewal-lead'],
-    ['SOP-07.3', 'SOP-07', 'No shipment is released against an expired authorization.', 'Automated', 'Continuous', 'no-post-expiry-shipment'],
-    ['SOP-07.4', 'SOP-07', 'Authorized value is monitored against the amendment threshold while term remains.', 'Automated', 'Continuous', 'value-monitoring'],
-    ['SOP-11.1', 'SOP-11', 'The jurisdiction of the item shipped matches the authorization it is shipped under.', 'Automated', 'Continuous', 'jurisdiction-match'],
-    ['SOP-11.2', 'SOP-11', 'No item is named on an authorization before it has a determination of record.', 'Automated', 'Continuous', 'classify-before-authorizing'],
-    ['SOP-11.3', 'SOP-11', 'Empowered Official review is evidenced before release for every controlled shipment.', 'Manual sample', 'Quarterly', null],
-    ['SOP-14.1', 'SOP-14', 'Supporting records are retained and retrievable for five years from the transaction.', 'Automated', 'Continuous', 'records-retention'],
-    ['SOP-14.2', 'SOP-14', 'Shipment records reconcile to the electronic export information filed.', 'Manual sample', 'Semi-annual', null],
-    ['SOP-19.1', 'SOP-19', 'Items exported temporarily are reconciled as returned on or before expiry.', 'Automated', 'Continuous', 'temp-reconciliation'],
-    ['SOP-19.2', 'SOP-19', 'An extension is requested where temporarily exported items must remain abroad.', 'Manual sample', 'Annual', null],
-    ['SOP-22.1', 'SOP-22', 'In-scope staff complete annual ITAR and EAR awareness training.', 'Manual sample', 'Annual', null],
-    ['SOP-22.2', 'SOP-22', 'New hires in scope complete awareness training within 30 days of start.', 'Manual sample', 'Quarterly', null],
+    ['SOP-03.1', 'SOP-03', 'Every part entering the item master receives a jurisdiction and classification determination within the service level.', 'Automated', 'Continuous', 'classification-sla', 0.15],
+    ['SOP-03.2', 'SOP-03', 'Every ITAR determination retains a written basis that can be produced on request.', 'Automated', 'Continuous', 'itar-basis', 0.1],
+    ['SOP-03.3', 'SOP-03', 'Determinations of record are re-reviewed on the published cycle.', 'Automated', 'Continuous', 'review-cycle', 0.1],
+    ['SOP-03.4', 'SOP-03', 'The determination method and the analyst of record are recorded against every determination.', 'Manual sample', 'Quarterly', null, 0.05],
+    ['SOP-07.1', 'SOP-07', 'Provisos are acknowledged and dated before the first shipment under the authorization.', 'Automated', 'Continuous', 'proviso-ack', 0.2],
+    ['SOP-07.2', 'SOP-07', 'A replacement application is filed ahead of the published renewal lead time.', 'Automated', 'Continuous', 'renewal-lead', 0.1],
+    ['SOP-07.3', 'SOP-07', 'No shipment is released against an expired authorization.', 'Automated', 'Continuous', 'no-post-expiry-shipment', 0.0],
+    ['SOP-07.4', 'SOP-07', 'Authorized value is monitored against the amendment threshold while term remains.', 'Automated', 'Continuous', 'value-monitoring', 0.15],
+    ['SOP-11.1', 'SOP-11', 'The jurisdiction of the item shipped matches the authorization it is shipped under.', 'Automated', 'Continuous', 'jurisdiction-match', 0.0],
+    ['SOP-11.2', 'SOP-11', 'No item is named on an authorization before it has a determination of record.', 'Automated', 'Continuous', 'classify-before-authorizing', 0.1],
+    ['SOP-11.3', 'SOP-11', 'Empowered Official review is evidenced before release for every controlled shipment.', 'Manual sample', 'Quarterly', null, 0.05],
+    ['SOP-14.1', 'SOP-14', 'Supporting records are retained and retrievable for five years from the transaction.', 'Automated', 'Continuous', 'records-retention', 0.1],
+    ['SOP-14.2', 'SOP-14', 'Shipment records reconcile to the electronic export information filed.', 'Manual sample', 'Semi-annual', null, 0.05],
+    ['SOP-19.1', 'SOP-19', 'Items exported temporarily are reconciled as returned on or before expiry.', 'Automated', 'Continuous', 'temp-reconciliation', 0.15],
+    ['SOP-19.2', 'SOP-19', 'An extension is requested where temporarily exported items must remain abroad.', 'Manual sample', 'Annual', null, 0.1],
+    ['SOP-22.1', 'SOP-22', 'In-scope staff complete annual ITAR and EAR awareness training.', 'Manual sample', 'Annual', null, 0.05],
+    ['SOP-22.2', 'SOP-22', 'New hires in scope complete awareness training within 30 days of start.', 'Manual sample', 'Quarterly', null, 0.05],
   ];
   const FREQ_DAYS = { Continuous: 1, Quarterly: 92, 'Semi-annual': 183, Annual: 365 };
   const FINDING_NOTES = [
@@ -1665,7 +1697,7 @@ const DATA = (function buildMockData() {
     'Two of the sampled transactions used a superseded version of the work instruction.',
   ];
 
-  const controls = CONTROL_SPECS.map(([id, sop, step, method, frequency, measure], i) => {
+  const controls = CONTROL_SPECS.map(([id, sop, step, method, frequency, measure, tdr], i) => {
     const sopTitle = SOPS.find((x) => x.sop === sop).sopTitle;
     const owner = ANALYSTS[i % ANALYSTS.length];
     const auto = method === 'Automated';
@@ -1678,6 +1710,14 @@ const DATA = (function buildMockData() {
       : (chance(0.06) ? null
         : addDays(asOf, -(overdueTest ? FREQ_DAYS[frequency] + int(20, 220) : int(4, FREQ_DAYS[frequency] - 5))));
 
+    /* Every control is tested against ITS OWN tolerable deviation rate, because
+       "conforming" means different things for different steps. A screening
+       step that misses one transaction in twenty is not working; a filing
+       step at the same rate might be acceptable. A handful of steps are
+       zero-tolerance: one deviation is a finding, full stop, and those are
+       counted separately rather than averaged into anything. */
+    const tolerableDeviationRate = tdr;
+    const zeroTolerance = tdr === 0;
     const sampleSize = auto ? null : int(12, 40);
     const failures = auto ? null : (chance(0.42) ? int(1, Math.max(1, Math.round(sampleSize * 0.18))) : 0);
     const passed = auto ? null : sampleSize - failures;
@@ -1707,7 +1747,7 @@ const DATA = (function buildMockData() {
     return {
       id, sop, sopTitle, step, owner, method, frequency, lastTestedOn,
       testedBy: auto ? null : pick(ANALYSTS),
-      sampleSize, passed, measure, findings,
+      sampleSize, passed, measure, findings, tolerableDeviationRate, zeroTolerance,
     };
   });
 
@@ -1958,7 +1998,80 @@ const DATA = (function buildMockData() {
     });
   }
 
-  return { asOf, authorizations, classifications: parts, controls, intermediaries, giftsLog, pursuits };
+  /* ---- Voluntary disclosures --------------------------------------------
+     The pipeline from "somebody found something" to "the regulator has the
+     full account". It is modelled because the queue already routes findings
+     toward a disclosure decision and had nowhere to route them TO — an
+     assessment with no register behind it is a decision nobody can show they
+     made.
+     The two regimes run different clocks and the difference is not cosmetic:
+       ITAR, 22 CFR 127.12(c)(2) — where the initial notification is not
+       complete, the full disclosure is due within 60 CALENDAR DAYS or DDTC
+       will not deem the notification to qualify as a voluntary disclosure.
+       An extension may be requested in writing by an empowered official.
+       EAR, 15 CFR 764.5 — the narrative account is due within 180 DAYS of the
+       initial notification for the disclosure to be treated as made on the
+       notification date. Missing it is expressly NOT a further violation of
+       the EAR; it may reduce or eliminate the mitigating weight.
+     Encoding those as one clock, or describing the EAR consequence in ITAR
+     terms, would be the same class of error as the citation defects the panel
+     found. */
+  const DISCLOSURE_STAGES = ['Under assessment', 'Initial notification filed', 'Full disclosure submitted', 'Closed'];
+  const DISCLOSURE_TRIGGERS = [
+    'Shipment recorded after the authorization expired',
+    'Value shipped past the authorized ceiling on a licence line',
+    'Temporary export not reconciled as returned',
+    'Article moved against an authorization of the wrong regime',
+    'Technical data released to a foreign national without an agreement in place',
+    'Retransfer by a consignee beyond the approved scope',
+  ];
+  const FULL_DISCLOSURE_DAYS = { ITAR: 60, EAR: 180 };
+
+  const disclosures = [];
+  const itarPool = authorizations.filter((x) => x.status === 'Issued' && x.regime === 'ITAR');
+  const earPool = authorizations.filter((x) => x.status === 'Issued' && x.regime === 'EAR');
+  for (let i = 0; i < 14; i++) {
+    /* Both regimes deliberately represented. Drawing the subject from the
+       portfolio at large would produce an almost entirely ITAR register — only
+       21 of 393 authorizations are BIS licences — and the whole point of
+       modelling disclosure is that the two clocks and their consequences are
+       different. A register showing one of them demonstrates nothing. */
+    const a = (i % 2 === 0 || !earPool.length) ? pick(itarPool) : pick(earPool);
+    const regime = a.regime;
+    const stageIdx = weighted([
+      { stage: 0, w: 26 }, { stage: 1, w: 30 }, { stage: 2, w: 28 }, { stage: 3, w: 16 },
+    ]).stage;
+    /* A disclosure that has been running for two years past its window is not
+       a plausible record — it is a generator artefact. An open matter is
+       recent; the ones that slip, slip by weeks or a few months. */
+    const window = FULL_DISCLOSURE_DAYS[regime];
+    const discoveredOn = addDays(asOf, -(stageIdx === 3 ? int(200, 700) : int(20, window + 150)));
+    const notifiedOn = stageIdx >= 1 ? addDays(discoveredOn, int(3, 40)) : null;
+    const dueOn = notifiedOn ? addDays(notifiedOn, window) : null;
+    const submittedOn = stageIdx >= 2 && dueOn
+      ? addDays(notifiedOn, int(10, window + (chance(0.25) ? 45 : -5)))
+      : null;
+    disclosures.push({
+      id: `VD-${asOf.getUTCFullYear()}-${pad(40 + i * int(1, 5), 3)}`,
+      regime,
+      trigger: pick(DISCLOSURE_TRIGGERS),
+      subjectId: a.id, program: a.program, site: a.site, country: a.destinations[0],
+      stage: DISCLOSURE_STAGES[stageIdx],
+      discoveredOn, notifiedOn, fullDisclosureDueOn: dueOn, submittedOn,
+      closedOn: stageIdx === 3 ? addDays(submittedOn || discoveredOn, int(30, 400)) : null,
+      /* An extension is a fact about the file, and it moves the date. */
+      extensionGrantedTo: notifiedOn && chance(0.14) ? addDays(dueOn, int(30, 120)) : null,
+      owner: programAnalyst.get(a.program),
+      /* Counsel-directed work sits behind privilege. The dashboard records
+         THAT it is privileged and never reproduces its content — a compliance
+         tool that copies legal analysis into a reporting layer is how
+         privilege gets waived by an operations team that never knew it held
+         any. */
+      counselDirected: chance(0.55),
+    });
+  }
+
+  return { asOf, authorizations, classifications: parts, controls, intermediaries, giftsLog, pursuits, disclosures };
 })();
 
 /* ===== END MOCK DATA LAYER ================================================ */
@@ -2135,6 +2248,206 @@ function trendMonths(at) {
     out.push(i === 0 ? at : endOfMonth(m));
   }
   return out;
+}
+
+/* ============================================================================
+   VOLUNTARY DISCLOSURES
+   Where a finding goes once somebody decides it might need reporting. The
+   queue already routed conditions toward a disclosure decision and had nowhere
+   to route them to; an assessment with no register behind it is a decision
+   nobody can show they made.
+   ========================================================================== */
+const DISCLOSURE_STAGE_ORDER = ['Under assessment', 'Initial notification filed', 'Full disclosure submitted', 'Closed'];
+
+function renderDisclosures(host, slice) {
+  host.textContent = '';
+  const at = AS_OF;
+  const all = slice.disclosures || [];
+  const m = disclosureMeasures(all, at);
+  const open = all.filter((d) => disclosureOpen(d, at));
+
+  host.appendChild(html('div', { class: 'section-head' }, [
+    html('p', { class: 'eyebrow', text: 'Module six' }),
+    html('h2', { text: 'Voluntary disclosures' }),
+    html('p', {
+      text: 'Findings that may need reporting, from discovery through initial notification to the full account. The two regimes run different clocks and the difference is not cosmetic: ITAR gives 60 calendar days from the initial notification for the full disclosure, and missing it means the Directorate of Defense Trade Controls will not deem the notification to qualify as a voluntary disclosure. EAR gives 180 days for the narrative account, and missing that is expressly not a further violation — it may reduce or eliminate the mitigating weight. This page tracks the clock and the decision; it does not reproduce counsel-directed analysis.',
+    }),
+  ]));
+
+  if (!all.length) {
+    host.appendChild(html('section', { class: 'card' }, [
+      html('p', { class: 'queue-empty', text: 'No disclosures in the current selection.' }),
+    ]));
+    return;
+  }
+
+  const kpis = html('div', { class: 'kpis kpis-4' });
+  const tile = (label, value, note) => html('section', { class: 'card kpi' }, [
+    html('p', { class: 'k', text: label }),
+    html('p', { class: 'v', text: value }),
+    html('p', { class: 'note', text: note }),
+  ]);
+  kpis.appendChild(tile('Open disclosures', fmtInt(m.openCount),
+    `${fmtInt(m.assessing)} under assessment · ${fmtInt(m.notified)} notified · ${fmtInt(m.submitted)} submitted`));
+  kpis.appendChild(tile('Past the regime window', fmtInt(m.overdue),
+    m.overdue === 0 ? 'Every open disclosure is inside its window'
+      : 'ITAR 60 calendar days, EAR 180 days, from the initial notification'));
+  kpis.appendChild(tile('On an extension', fmtInt(m.onExtension),
+    'Requested in writing and granted — the extended date is the one the clock runs to'));
+  kpis.appendChild(tile('Median age', m.medianAgeDays === null ? '—' : fmtDuration(m.medianAgeDays),
+    `Since discovery · ${fmtInt(m.privileged)} of ${fmtInt(m.openCount)} are counsel-directed`));
+  host.appendChild(kpis);
+
+  const grid = html('div', { class: 'grid-2' });
+
+  /* ---- Pipeline by stage ---- */
+  const stageRows = DISCLOSURE_STAGE_ORDER.slice(0, 3).map((stage) => ({
+    label: stage,
+    value: open.filter((d) => d.stage === stage).length,
+    varName: '--magnitude',
+  }));
+  grid.appendChild(figure({
+    title: 'Where each open disclosure sits',
+    subtitle: 'Stage of the open population. Closed disclosures are excluded.',
+    footnote: 'Stage is a position in a process rather than an ordered severity, so it takes one hue and the labels carry the meaning. A disclosure under assessment is not "better" than one submitted — it is earlier, and the clock has not started.',
+    draw: (w) => barsH(w, {
+      rows: stageRows, band: 32, bar: 17, labelMax: 200,
+      display: (r) => fmtInt(r.value),
+      tipTitle: (r) => r.label,
+      tipRows: (r) => [{ value: fmtInt(r.value), name: 'open disclosures', color: 'var(--magnitude)' }],
+    }),
+    table: {
+      columns: [{ key: 'stage', label: 'Stage' }, { key: 'n', label: 'Open', num: true }],
+      rows: stageRows.map((r) => ({ stage: r.label, n: fmtInt(r.value) })),
+    },
+  }));
+
+  /* ---- Days remaining against each regime's own window ---- */
+  const clockRows = open.filter((d) => d.notifiedOn && !d.submittedOn)
+    .map((d) => ({
+      label: `${d.id} · ${d.regime}`,
+      value: Math.max(0, daysBetween(at, disclosureDueOn(d))),
+      overdue: disclosureOverdue(d, at),
+      d,
+    }))
+    .sort((a, b) => a.value - b.value);
+  grid.appendChild(figure({
+    title: 'Days remaining to the full account',
+    subtitle: 'Open disclosures that have been notified but not yet completed, soonest first.',
+    footnote: 'The two bars are not comparable in length and are not meant to be: an ITAR disclosure has 60 calendar days and an EAR one has 180, so the regime is named on every row. A bar at zero is past its window, and what that costs differs by regime — DDTC will not deem an ITAR notification voluntary, while under the EAR the disclosure simply loses mitigating weight.',
+    draw: (w) => (clockRows.length ? barsH(w, {
+      rows: clockRows, band: 30, bar: 16, labelMax: 200,
+      colorOf: (r) => (r.overdue ? 'var(--status-critical)' : 'var(--magnitude)'),
+      display: (r) => (r.overdue ? `${fmtInt(daysBetween(disclosureDueOn(r.d), at))} days over` : `${fmtInt(r.value)} days left`),
+      tipTitle: (r) => r.d.id,
+      tipRows: (r) => [
+        { value: r.d.regime, name: 'regime' },
+        { value: fmtDate(r.d.notifiedOn), name: 'notified' },
+        { value: fmtDate(disclosureDueOn(r.d)), name: 'full account due' },
+        { value: `${DISCLOSURE_WINDOW_DAYS[r.d.regime]} days`, name: 'window' },
+      ],
+    }) : html('p', { class: 'queue-empty', text: 'Nothing is currently awaiting a full account.' })),
+    table: {
+      columns: [
+        { key: 'id', label: 'Disclosure' }, { key: 'regime', label: 'Regime' },
+        { key: 'notified', label: 'Notified' }, { key: 'due', label: 'Full account due' },
+        { key: 'left', label: 'Days', num: true },
+      ],
+      rows: clockRows.map((r) => ({
+        id: r.d.id, regime: r.d.regime, notified: fmtDate(r.d.notifiedOn),
+        due: fmtDate(disclosureDueOn(r.d)),
+        left: r.overdue ? `${fmtInt(daysBetween(disclosureDueOn(r.d), at))} over` : fmtInt(r.value),
+      })),
+    },
+  }));
+  host.appendChild(grid);
+
+  /* ---- Register ---- */
+  host.appendChild(html('div', { class: 'section-head' }, [
+    html('p', { class: 'eyebrow', text: 'Records' }),
+    html('h2', { text: 'Disclosure register' }),
+    html('p', { text: 'Every disclosure and the record behind it. Where a matter is counsel-directed the page records that it is and stops there — a compliance tool that copies legal analysis into a reporting layer is how privilege gets waived by an operations team that never knew it held any.' }),
+  ]));
+
+  const rows = all.slice().sort((a, b) => {
+    const ao = disclosureOverdue(a, at) ? 0 : 1, bo = disclosureOverdue(b, at) ? 0 : 1;
+    return ao - bo || a.discoveredOn - b.discoveredOn;
+  });
+  host.appendChild(sortableTable({
+    rows, caption: 'Disclosure register',
+    focusKey: STATE.view === 'disclosures' ? STATE.focus : null,
+    initial: { key: 'discovered', dir: 'asc' },
+    columns: [
+      { key: 'id', label: 'Disclosure', sort: (d) => d.id, cell: (d) => d.id, expandable: true },
+      { key: 'regime', label: 'Regime', sort: (d) => d.regime, cell: (d) => d.regime },
+      { key: 'subject', label: 'Subject', sort: (d) => d.subjectId, cell: (d) => d.subjectId },
+      { key: 'program', label: 'Program', sort: (d) => d.program, cell: (d) => d.program },
+      { key: 'stage', label: 'Stage', sort: (d) => DISCLOSURE_STAGE_ORDER.indexOf(d.stage), cell: (d) => d.stage },
+      { key: 'discovered', label: 'Discovered', sort: (d) => d.discoveredOn.getTime(), cell: (d) => fmtDate(d.discoveredOn) },
+      { key: 'due', label: 'Full account due', sort: (d) => (disclosureDueOn(d) ? disclosureDueOn(d).getTime() : Infinity), cell: (d) => (disclosureDueOn(d) ? fmtDate(disclosureDueOn(d)) : '—') },
+      { key: 'state', label: 'Clock', sort: (d) => (disclosureOverdue(d, at) ? 0 : 1), cell: (d) => (disclosureOverdue(d, at) ? 'Past window' : d.submittedOn ? 'Submitted' : d.notifiedOn ? 'Running' : 'Not started') },
+    ],
+    detail: (d) => {
+      const box = html('div', { class: 'detailbox' });
+      const facts = html('div', {}, [html('h4', { text: 'Disclosure' })]);
+      const kv = (k, v) => facts.appendChild(html('div', { class: 'kv' }, [html('span', { text: k }), html('span', { text: v })]));
+      kv('Regime', d.regime);
+      kv('Trigger', d.trigger);
+      kv('Program', d.program);
+      kv('Destination', d.country);
+      kv('Stage', d.stage);
+      kv('Discovered', fmtDate(d.discoveredOn));
+      kv('Initial notification', d.notifiedOn ? fmtDate(d.notifiedOn) : 'Not filed');
+      kv('Window', `${DISCLOSURE_WINDOW_DAYS[d.regime]} days (${d.regime === 'ITAR' ? '22 CFR 127.12(c)(2)' : '15 CFR 764.5'})`);
+      kv('Full account due', disclosureDueOn(d) ? fmtDate(disclosureDueOn(d)) : '—');
+      if (d.extensionGrantedTo) kv('Extension granted to', fmtDate(d.extensionGrantedTo));
+      kv('Full account submitted', d.submittedOn ? fmtDate(d.submittedOn) : 'Not submitted');
+      kv('Closed', d.closedOn ? fmtDate(d.closedOn) : 'Open');
+      kv('Owner', d.owner);
+      box.appendChild(facts);
+
+      const note = html('div', {}, [html('h4', { text: 'Handling' })]);
+      const nl = html('ul');
+      nl.appendChild(html('li', {}, [
+        html('span', { class: 'ref', text: d.counselDirected ? SEVERITY_META.warning.icon : '·' }),
+        html('span', {
+          text: d.counselDirected
+            ? 'Counsel-directed. The analysis behind this matter is held outside this system and is not reproduced here.'
+            : 'Compliance-led. No privilege asserted over the assessment.',
+        }),
+      ]));
+      if (d.regime === 'ITAR') {
+        nl.appendChild(html('li', {}, [
+          html('span', { class: 'ref', text: '·' }),
+          html('span', { text: 'Under 22 CFR 127.12(c)(2), where the initial notification is not complete the full disclosure is due within 60 calendar days, or DDTC will not deem the notification to qualify as a voluntary disclosure. An empowered official may request an extension in writing.' }),
+        ]));
+      } else {
+        nl.appendChild(html('li', {}, [
+          html('span', { class: 'ref', text: '·' }),
+          html('span', { text: 'Under 15 CFR 764.5 the narrative account is due within 180 days for the disclosure to be treated as made on the notification date. Missing the deadline is not itself a further violation of the EAR; it may reduce or eliminate the mitigating weight.' }),
+        ]));
+      }
+      note.appendChild(nl);
+      box.appendChild(note);
+
+      const link = html('div', {}, [html('h4', { text: 'Subject record' })]);
+      const ll = html('ul');
+      ll.appendChild(html('li', {}, [
+        html('span', { class: 'ref', text: 'Auth' }),
+        html('span', {}, [
+          html('button', {
+            class: 'drill', type: 'button', text: d.subjectId,
+            'data-fk': `vd-auth:${d.id}`,
+            title: `Open ${d.subjectId} in the Authorizations detail table`,
+            onclick: () => { STATE.view = 'auth'; STATE.focus = d.subjectId; render(); },
+          }),
+        ]),
+      ]));
+      link.appendChild(ll);
+      box.appendChild(link);
+      return box;
+    },
+  }));
 }
 
 /* ============================================================================
@@ -2854,6 +3167,54 @@ const AUTOMATED_MEASURES = {
 
 const FREQUENCY_DAYS = { Continuous: 1, Quarterly: 92, 'Semi-annual': 183, Annual: 365 };
 
+/* The smallest sample that can support a conclusion at this tolerable deviation
+   rate, with zero deviations expected, at 95% confidence. Attribute sampling:
+   n >= ln(1 - confidence) / ln(1 - TDR). At a 5% TDR that is 59 items — so a
+   20-item sample cannot conclude a control effective at 5%, however clean it
+   comes back. Reporting one as "effective" anyway is the quiet way an audit
+   file ends up asserting more than its own evidence supports. */
+function minSampleFor(tdr, confidence = 0.95) {
+  if (!(tdr > 0)) return Infinity;   /* zero tolerance cannot be sampled to */
+  return Math.ceil(Math.log(1 - confidence) / Math.log(1 - tdr));
+}
+
+/* One control, one conclusion, drawn against that control's own tolerance and
+   on its own unit. This replaces a single pooled conformance percentage whose
+   denominator mixed shipments, parts and agreements — a number that went up
+   and down without telling anyone what to do, and that every reviewer on the
+   practitioner panel rejected.
+     effective     — deviation rate within tolerance, on evidence that supports it
+     not-effective — deviation rate above tolerance, or any deviation at all on
+                     a zero-tolerance step
+     insufficient  — nothing tested, no valid result, or a sample too small to
+                     support the tolerance it is being judged against */
+function controlConclusion(control, result) {
+  if (result.unresolved || result.tested === 0 || result.staleDays === Infinity) {
+    return { key: 'insufficient', label: 'Insufficient evidence', why: result.unresolved ? 'The measure does not resolve, so the control produced no result.' : 'Nothing was tested.' };
+  }
+  const rate = result.failures / result.tested;
+  if (control.zeroTolerance) {
+    return result.failures === 0
+      ? { key: 'effective', label: 'Effective', why: 'Zero-tolerance step with no deviations in the tested population.' }
+      : { key: 'not-effective', label: 'Not effective', why: `Zero-tolerance step with ${fmtInt(result.failures)} deviation${result.failures === 1 ? '' : 's'}.` };
+  }
+  if (rate > control.tolerableDeviationRate) {
+    return { key: 'not-effective', label: 'Not effective', why: `Deviation rate ${fmtPct(rate, 1)} against a tolerance of ${fmtPct(control.tolerableDeviationRate, 0)}.` };
+  }
+  /* A continuous control tests the whole population, so sample size is not a
+     question that arises for it. */
+  if (!result.continuous) {
+    const need = minSampleFor(control.tolerableDeviationRate);
+    if (result.tested < need) {
+      return {
+        key: 'insufficient', label: 'Insufficient evidence',
+        why: `${fmtInt(result.tested)} items examined; ${fmtInt(need)} are needed to conclude at a ${fmtPct(control.tolerableDeviationRate, 0)} tolerance with 95% confidence.`,
+      };
+    }
+  }
+  return { key: 'effective', label: 'Effective', why: `Deviation rate ${fmtPct(rate, 1)} within a tolerance of ${fmtPct(control.tolerableDeviationRate, 0)}.` };
+}
+
 /** A control's result: what was tested, how much of it conformed, and how. */
 function controlResult(control, slice, at) {
   if (control.method === 'Automated') {
@@ -2901,7 +3262,10 @@ const openFindingAt = (f, at) => f.raisedOn <= at && (f.closedOn === null || f.c
 
 /** Roll controls up to their procedure, weighting by what was actually tested. */
 function processCompliance(slice, at) {
-  const rows = (slice.controls || []).map((c) => ({ control: c, result: controlResult(c, slice, at) }));
+  const rows = (slice.controls || []).map((c) => {
+    const result = controlResult(c, slice, at);
+    return { control: c, result, conclusion: controlConclusion(c, result) };
+  });
   const bySop = [...groupBy(rows, (r) => r.control.sop).entries()].map(([sop, rs]) => {
     const tested = sum(rs.map((r) => r.result.tested));
     const passed = sum(rs.map((r) => r.result.passed));
@@ -2929,7 +3293,36 @@ function processCompliance(slice, at) {
     openFindings: findings.filter((f) => openFindingAt(f, at)).length,
     overdueFindings: findings.filter((f) => openFindingAt(f, at) && f.dueOn <= at).length,
     findings,
+
+    /* The scoreboard, as a small vector rather than one number. Every reviewer
+       on the practitioner panel rejected the pooled percentage this replaces:
+       item-weighting put shipments, parts and agreements in one denominator
+       nobody could name, and weighting each control equally would have let a
+       20-item sample outvote a 4,000-record population test. Neither survives
+       the question "what does this number mean". These do. */
+    effective: rows.filter((r) => r.conclusion.key === 'effective').length,
+    notEffective: rows.filter((r) => r.conclusion.key === 'not-effective').length,
+    insufficient: rows.filter((r) => r.conclusion.key === 'insufficient').length,
+    inScope: rows.length,
+    /* Kept outside the ratio entirely: a zero-tolerance deviation is not a rate. */
+    zeroToleranceExceptions: sum(rows.filter((r) => r.control.zeroTolerance).map((r) => r.result.failures || 0)),
+    /* Coverage is per control and never blended — a range, so the reader can
+       see that one control examined 1% of its population and another 100%. */
+    coverageRange: (() => {
+      const cov = rows.filter((r) => r.result.tested > 0 && !r.result.unresolved)
+        .map((r) => (r.result.continuous ? 1 : r.result.tested / Math.max(r.result.tested, populationFor(r.control, slice, at))));
+      return cov.length ? { lo: Math.min(...cov), hi: Math.max(...cov) } : null;
+    })(),
   };
+}
+
+/** The population a manual control is sampling from, so coverage can be stated
+    per control instead of pooled. Manual steps sample the transaction stream;
+    the figure is illustrative here and would come from the feed in a real one. */
+function populationFor(control, slice, at) {
+  if (control.method === 'Automated') return 1;
+  const shipments = sum((slice.authorizations || []).map((a) => a.shipments.filter((sh) => sh.date <= at).length));
+  return Math.max(control.sampleSize || 1, Math.round(shipments / 4));
 }
 
 /* ============================================================================
@@ -3014,6 +3407,48 @@ function intermediaryIssues(t, at) {
 }
 
 const materialIssues = (t, at) => intermediaryIssues(t, at).filter((i) => i.material);
+
+/* Voluntary disclosure clocks. The two regimes are different in both length
+   and consequence, so they are never collapsed into one field.
+     ITAR — 22 CFR 127.12(c)(2): 60 calendar days from the initial notification
+     for the full disclosure, or DDTC will not deem the notification to qualify
+     as a voluntary disclosure.
+     EAR — 15 CFR 764.5: 180 days for the narrative account, for the disclosure
+     to be treated as made on the notification date. Missing it is expressly
+     not a further violation; it may reduce or eliminate mitigating weight. */
+const DISCLOSURE_WINDOW_DAYS = { ITAR: 60, EAR: 180 };
+const disclosureDueOn = (d) => d.extensionGrantedTo || d.fullDisclosureDueOn;
+const disclosureOpen = (d, at) => d.discoveredOn <= at && (d.closedOn === null || d.closedOn > at);
+const disclosureOverdue = (d, at) => disclosureOpen(d, at) && d.submittedOn === null
+  && disclosureDueOn(d) !== null && disclosureDueOn(d) <= at;
+
+function disclosureMeasures(list, at) {
+  const open = (list || []).filter((d) => disclosureOpen(d, at));
+  return {
+    openCount: open.length,
+    assessing: open.filter((d) => d.stage === 'Under assessment').length,
+    notified: open.filter((d) => d.stage === 'Initial notification filed').length,
+    submitted: open.filter((d) => d.stage === 'Full disclosure submitted').length,
+    overdue: open.filter((d) => disclosureOverdue(d, at)).length,
+    onExtension: open.filter((d) => d.extensionGrantedTo !== null).length,
+    privileged: open.filter((d) => d.counselDirected).length,
+    medianAgeDays: median(open.map((d) => daysBetween(d.discoveredOn, at))),
+  };
+}
+
+/** Foreign parties named on live authorizations whose screening is unresolved
+    or out of date. The population is the end users and consignees on the face
+    of the licence — the people a restricted-party list is actually about. */
+function partyScreening(auths, at) {
+  const out = [];
+  for (const a of liveAuths(auths, at)) {
+    for (const fp of a.foreignParties) {
+      const stale = fp.lastScreenedOn === null || daysBetween(fp.lastScreenedOn, at) > SCREEN_VALID_DAYS;
+      if (fp.screenHit || stale) out.push({ auth: a, party: fp, stale, hit: fp.screenHit });
+    }
+  }
+  return out;
+}
 
 /** Headline measures for the anti-corruption module. */
 function antiCorruptionMeasures(slice, at) {
@@ -3483,6 +3918,89 @@ const RULES = [
         cite: '15 U.S.C. 78dd-1 (FCPA anti-bribery)',
         view: 'anticorruption', focus: t.id,
       })),
+  },
+  {
+    key: 'disclosure-window',
+    severity: 'critical',
+    name: 'Full disclosure not submitted within the regime window',
+    run: (s, at) => (s.disclosures || [])
+      .filter((d) => disclosureOverdue(d, at))
+      .map((d) => {
+        const days = DISCLOSURE_WINDOW_DAYS[d.regime];
+        const over = daysBetween(disclosureDueOn(d), at);
+        return {
+          subject: d.id,
+          title: `${d.id} — full disclosure ${fmtDuration(over)} past the ${d.regime} window`,
+          why: d.regime === 'ITAR'
+            ? `The initial notification was filed ${fmtDate(d.notifiedOn)}. Under 22 CFR 127.12(c)(2) the full disclosure is due within ${days} calendar days${d.extensionGrantedTo ? ', extended to ' + fmtDate(d.extensionGrantedTo) : ''}, or the Directorate of Defense Trade Controls will not deem the notification to qualify as a voluntary disclosure. An empowered official may request a further extension in writing.`
+            : `The initial notification was filed ${fmtDate(d.notifiedOn)}. Under 15 CFR 764.5 the narrative account is due within ${days} days${d.extensionGrantedTo ? ', extended to ' + fmtDate(d.extensionGrantedTo) : ''} for the disclosure to be treated as made on the notification date. Missing the deadline is not itself a further violation of the EAR, but it may reduce or eliminate the mitigating weight of the disclosure.`,
+          value: fmtDuration(over), valueLabel: 'past the window',
+          meta: [d.regime, d.subjectId, d.program, `Notified ${fmtDate(d.notifiedOn)}`],
+          owner: d.owner, onsetOn: disclosureDueOn(d),
+          cite: d.regime === 'ITAR' ? '22 CFR 127.12(c)(2)' : '15 CFR 764.5',
+          view: 'disclosures', focus: d.id,
+        };
+      }),
+  },
+  {
+    key: 'disclosure-assessment-open',
+    severity: 'serious',
+    name: 'Potential disclosure under assessment with no decision recorded',
+    run: (s, at) => (s.disclosures || [])
+      .filter((d) => disclosureOpen(d, at) && d.stage === 'Under assessment'
+        && daysBetween(d.discoveredOn, at) > 45)
+      .map((d) => ({
+        subject: d.id,
+        title: `${d.id} — under assessment ${fmtDuration(daysBetween(d.discoveredOn, at))} with no decision`,
+        why: `${d.trigger}, found ${fmtDate(d.discoveredOn)} on ${d.subjectId}. No decision to disclose or not to disclose is recorded. The decision itself is the deliverable — either outcome is defensible and an open assessment with no conclusion is not, because the file cannot later show when the company knew and what it did about it.`,
+        value: fmtDuration(daysBetween(d.discoveredOn, at)), valueLabel: 'under assessment',
+        meta: [d.regime, d.subjectId, d.program, d.counselDirected ? 'Counsel-directed' : 'Compliance-led'],
+        owner: d.owner, onsetOn: addDays(d.discoveredOn, 45),
+        cite: 'Policy: disclosure decision within 45 days of discovery',
+        view: 'disclosures', focus: d.id,
+      })),
+  },
+  {
+    key: 'party-screen-hit',
+    severity: 'critical',
+    name: 'Screening match on an end user or consignee named on a live authorization',
+    run: (s, at) => partyScreening(s.authorizations, at)
+      .filter((x) => x.hit)
+      .map(({ auth, party }) => ({
+        subject: auth.id,
+        title: `${auth.id} — screening match on ${party.name}`,
+        why: `${party.name} is named as ${party.role.toLowerCase()} on this live authorization and a restricted-party screen returned a potential match that carries no resolution in the record. Shipments naming this party should hold until the match is cleared or confirmed. Confirm the identity against the list entry and refer to trade counsel.`,
+        value: party.role, valueLabel: 'on the licence',
+        meta: [auth.kindLabel, auth.program, party.country, `Expires ${fmtDate(auth.expiresOn)}`],
+        owner: auth.analyst, onsetOn: party.lastScreenedOn || auth.issuedOn,
+        cite: 'Policy: screening matches resolved before shipment',
+        view: 'auth', focus: auth.id,
+      })),
+  },
+  {
+    key: 'party-screen-stale',
+    severity: 'serious',
+    name: 'End user or consignee on a live authorization not screened within the cycle',
+    run: (s, at) => {
+      const byAuth = groupBy(partyScreening(s.authorizations, at).filter((x) => x.stale && !x.hit), (x) => x.auth.id);
+      return [...byAuth.entries()].map(([, xs]) => {
+        const auth = xs[0].auth;
+        const never = xs.filter((x) => x.party.lastScreenedOn === null).length;
+        return {
+          subject: auth.id,
+          title: `${auth.id} — ${xs.length === 1 ? 'a named party is' : `${xs.length} named parties are`} past the screening cycle`,
+          why: `${xs.map((x) => x.party.name).join(', ')} ${xs.length === 1 ? 'is' : 'are'} named on this live authorization and ${never === xs.length ? 'carries no screening record at all' : `${xs.length === 1 ? 'was' : 'were'} last screened more than ${SCREEN_VALID_DAYS} days ago`}. Restricted-party lists change continuously, so a screen states a date rather than a permanent clearance. Re-screen and record the date.`,
+          value: `${xs.length}`, valueLabel: xs.length === 1 ? 'party' : 'parties',
+          meta: [auth.kindLabel, auth.program, auth.destinations.join(', ')],
+          owner: auth.analyst,
+          onsetOn: xs.map((x) => x.party.lastScreenedOn).filter(Boolean).sort((p, q) => p - q)[0]
+            ? addDays(xs.map((x) => x.party.lastScreenedOn).filter(Boolean).sort((p, q) => p - q)[0], SCREEN_VALID_DAYS)
+            : auth.issuedOn,
+          cite: `Policy: ${SCREEN_VALID_DAYS}-day screening cycle`,
+          view: 'auth', focus: auth.id,
+        };
+      });
+    },
   },
   {
     key: 'diligence-overdue',
@@ -4351,6 +4869,7 @@ function currentSlice() {
     intermediaries: DATA.intermediaries.filter(keepByProgram),
     giftsLog: DATA.giftsLog.filter(keepByProgram),
     pursuits: DATA.pursuits.filter(keepByProgram),
+    disclosures: DATA.disclosures.filter(keepByProgram),
   };
 }
 
@@ -4720,7 +5239,7 @@ function renderPosture(host, slice) {
         act.appendChild(html('button', {
           class: 'btn btn-sm', type: 'button', text: 'Open record',
           'data-fk': `drill:${it.actionId}`,
-          title: `Open ${it.subject} in the ${{ auth: 'Authorizations', class: 'Classification', process: 'Process compliance', pursuits: 'Pursuits and programs', anticorruption: 'Anti-corruption' }[it.view]} detail table`,
+          title: `Open ${it.subject} in the ${{ auth: 'Authorizations', class: 'Classification', process: 'Process compliance', pursuits: 'Pursuits and programs', anticorruption: 'Anti-corruption', disclosures: 'Disclosures' }[it.view]} detail table`,
           onclick: () => { STATE.view = it.view; STATE.focus = it.focus; STATE.returnTo = 'posture'; render(); },
         }));
         const sel = html('select', { 'aria-label': `Owner of ${it.subject}`, 'data-fk': `owner:${it.actionId}` });
@@ -5187,7 +5706,17 @@ function renderAuthorizations(host, slice) {
       const fp = html('div', {}, [html('h4', { text: 'Foreign parties' })]);
       const fl = html('ul');
       for (const p of a.foreignParties) {
-        fl.appendChild(html('li', {}, [html('span', { class: 'ref', text: p.role }), html('span', { text: `${p.name} (${p.country})` })]));
+        const stale = p.lastScreenedOn === null || daysBetween(p.lastScreenedOn, AS_OF) > SCREEN_VALID_DAYS;
+        const screen = p.screenHit ? 'unresolved screening match'
+          : p.lastScreenedOn === null ? 'never screened'
+            : `screened ${fmtDate(p.lastScreenedOn)}${stale ? ' — past the cycle' : ''}`;
+        fl.appendChild(html('li', {}, [
+          html('span', { class: 'ref', text: p.role }),
+          html('span', {}, [
+            html('span', { text: `${p.name} (${p.country}) ` }),
+            html('span', { class: 'muted', text: screen }),
+          ]),
+        ]));
       }
       fp.appendChild(fl);
       sh.appendChild(fp);
@@ -5374,21 +5903,29 @@ function renderProcess(host, slice) {
   host.appendChild(html('div', { class: 'section-head' }, [
     html('p', { class: 'eyebrow', text: 'Module three' }),
     html('h2', { text: 'Process compliance' }),
-    html('p', { text: 'Whether the written procedure is the procedure being followed. Each row of each table is one SOP step under test: an automated control is evaluated continuously against the whole population and its evidence is the record set itself; a manual control carries the result of a periodic sample. Both land in the same conformance figure.' }),
+    html('p', { text: 'Whether the written procedure is the procedure being followed. Each row of each table is one SOP step under test: an automated control is evaluated continuously against the whole population and its evidence is the record set itself; a manual control carries the result of a periodic sample. They do not land in a shared percentage: each is concluded against its own tolerable deviation rate, on its own unit, and the scoreboard counts conclusions rather than averaging rates that were never commensurable.' }),
   ]));
 
   const tiles = [
     {
-      label: 'Control conformance', value: pc.conformance === null ? '—' : fmtPct(pc.conformance, 1),
-      note: `${fmtInt(pc.testedTotal)} items tested, ${fmtInt(pc.failuresTotal)} exceptions · target ${fmtPct(POLICY.CONFORMANCE_TARGET)}`,
+      /* "14 of 17 controls effective" is what an audit committee is given and
+         what internal and external audit already speak. The percentage this
+         replaced pooled shipments, parts and agreements into a denominator
+         nobody could name — it moved without telling anyone what to do, and
+         every reviewer on the practitioner panel rejected it. */
+      label: 'Controls effective', value: `${fmtInt(pc.effective)} of ${fmtInt(pc.inScope)}`,
+      note: `${fmtInt(pc.notEffective)} not effective · ${fmtInt(pc.insufficient)} insufficient evidence · each judged against its own tolerable deviation rate`,
     },
     {
-      label: 'Continuously tested', value: `${fmtInt(pc.automatedCount)} of ${fmtInt(pc.automatedCount + pc.manualCount)}`,
-      note: `${fmtInt(pc.automatedCount)} controls run against the whole population; ${fmtInt(pc.manualCount)} rely on a periodic sample`,
+      label: 'Zero-tolerance exceptions', value: fmtInt(pc.zeroToleranceExceptions),
+      note: pc.zeroToleranceExceptions === 0
+        ? 'No deviations on the steps where one is a finding'
+        : 'Counted, never averaged — these steps have no acceptable error rate',
     },
     {
-      label: 'Tests past their own frequency', value: fmtInt(pc.staleCount),
-      note: pc.neverTested > 0 ? `${fmtInt(pc.neverTested)} of these have never been run` : 'Every control has been tested at least once',
+      label: 'Testing coverage', value: pc.coverageRange === null ? '—'
+        : `${fmtPct(pc.coverageRange.lo, 1)}–${fmtPct(pc.coverageRange.hi, 0)}`,
+      note: `${fmtInt(pc.automatedCount)} controls run against the whole population; ${fmtInt(pc.manualCount)} rely on a periodic sample. Never blended into one figure.`,
     },
     {
       label: 'Open corrective actions', value: fmtInt(pc.openFindings),
@@ -5410,86 +5947,72 @@ function renderProcess(host, slice) {
      one child is a layout, not a comparison. */
   const grid = html('div', {});
 
-  /* ---- Conformance shortfall by procedure ---- */
-  /* Drawn as distance below target, not as the level. On a zero-baselined
-     0–100% axis the four middle procedures differed by 1.5 points — about
-     fourteen pixels of a 939px bar — so they were visually identical and the
-     reader was left reading the digits while the bars did nothing. The
-     question this figure exists to answer is "how far off target is each
-     procedure", and encoding that directly makes the answer the longest bar:
-     a procedure at or above target draws nothing, which is the right amount
-     of ink for something that needs no action. */
-  const TARGET = POLICY.CONFORMANCE_TARGET;
-  const sopRows = pc.bySop.map((r) => ({
-    label: r.sop,
-    value: r.conformance === null ? 0 : Math.max(0, (TARGET - r.conformance) * 100),
-    r,
-  })).sort((a, b) => b.value - a.value);
-  const worstGap = Math.max(1, ...sopRows.map((x) => x.value));
+  /* ---- Control conclusions ---- */
+  const CONCL = [
+    { key: 'effective', label: 'Effective', v: '--asr-1' },
+    { key: 'insufficient', label: 'Insufficient evidence', v: '--asr-2' },
+    { key: 'not-effective', label: 'Not effective', v: '--asr-3' },
+  ];
+  const bySopConcl = pc.bySop.map((r) => {
+    const inSop = pc.rows.filter((x) => x.control.sop === r.sop);
+    return {
+      sop: r.sop, sopTitle: r.sopTitle, n: inSop.length,
+      effective: inSop.filter((x) => x.conclusion.key === 'effective').length,
+      insufficient: inSop.filter((x) => x.conclusion.key === 'insufficient').length,
+      notEffective: inSop.filter((x) => x.conclusion.key === 'not-effective').length,
+    };
+  }).sort((a, b) => (b.notEffective - a.notEffective) || (b.insufficient - a.insufficient));
   grid.appendChild(figure({
-    title: 'Conformance shortfall by procedure',
-    subtitle: `Points below the ${fmtPct(TARGET)} internal target. Furthest first; a procedure at or above target draws no bar.`,
-    footnote: `Conformance itself is items conforming ÷ items tested, weighted by what was actually tested, so a procedure carrying an automated control over thousands of records is not averaged against a 20-item sample. The target is the internal one at ${fmtPct(TARGET)}, not a regulatory figure.`,
-    draw: (w) => barsH(w, {
-      rows: sopRows, band: 32, bar: 17, maxValue: worstGap, labelMax: 90,
-      display: (r) => (r.r.conformance === null ? 'no result'
-        : r.value === 0 ? `${fmtPct(r.r.conformance, 1)} — at target`
-        : `${r.value.toFixed(1)} pts below · ${fmtPct(r.r.conformance, 1)}`),
-      tipTitle: (r) => `${r.r.sop} · ${r.r.sopTitle}`,
-      tipRows: (r) => [
-        { value: r.r.conformance === null ? '—' : fmtPct(r.r.conformance, 1), name: 'conforming', color: 'var(--magnitude)' },
-        { value: `${fmtInt(r.r.passed)} of ${fmtInt(r.r.tested)}`, name: 'items tested' },
-        { value: `${fmtInt(r.r.automated)} of ${fmtInt(r.r.controls)}`, name: 'controls automated' },
+    title: 'Control conclusions by procedure',
+    subtitle: 'Every control under each SOP, concluded against its own tolerable deviation rate. Weakest procedure first.',
+    legend: CONCL.map((x) => ({ label: x.label, color: `var(${x.v})`, shape: 'rect' })),
+    footnote: 'A conclusion is not a percentage. Each control is judged on its own unit against its own tolerance, and where the evidence cannot support the tolerance — a 20-item sample against a 5% rate needs 59 items at 95% confidence — the conclusion is "insufficient evidence" rather than "effective". Reporting it as effective anyway is the quiet way an audit file asserts more than its own evidence supports.',
+    draw: (w) => columns(w, {
+      labels: bySopConcl.map((r) => r.sop),
+      series: [
+        { label: 'Effective', color: c('--asr-1'), values: bySopConcl.map((r) => r.effective) },
+        { label: 'Insufficient evidence', color: c('--asr-2'), values: bySopConcl.map((r) => r.insufficient) },
+        { label: 'Not effective', color: c('--asr-3'), values: bySopConcl.map((r) => r.notEffective) },
       ],
+      stacked: true,
+      yFmt: fmtInt,
     }),
     table: {
       columns: [
         { key: 'sop', label: 'SOP' }, { key: 'title', label: 'Procedure' },
-        { key: 'controls', label: 'Controls', num: true }, { key: 'automated', label: 'Automated', num: true },
-        { key: 'tested', label: 'Tested', num: true }, { key: 'failures', label: 'Exceptions', num: true },
-        { key: 'conf', label: 'Conformance', num: true }, { key: 'capa', label: 'Open actions', num: true },
+        { key: 'n', label: 'Controls', num: true }, { key: 'eff', label: 'Effective', num: true },
+        { key: 'ins', label: 'Insufficient', num: true }, { key: 'not', label: 'Not effective', num: true },
       ],
-      rows: pc.bySop.map((r) => ({
-        sop: r.sop, title: r.sopTitle, controls: fmtInt(r.controls), automated: fmtInt(r.automated),
-        tested: fmtInt(r.tested), failures: fmtInt(r.failures),
-        conf: r.conformance === null ? '—' : fmtPct(r.conformance, 1), capa: fmtInt(r.openFindings),
+      rows: bySopConcl.map((r) => ({
+        sop: r.sop, title: r.sopTitle, n: fmtInt(r.n), eff: fmtInt(r.effective),
+        ins: fmtInt(r.insufficient), not: fmtInt(r.notEffective),
       })),
     },
   }));
 
-  /* The stacked "assurance coverage" bar that used to sit here carried three
-     integers — 11 / 4 / 2 — directly beneath a KPI tile already reading
-     "11 of 17 · 11 run against the whole population; 6 rely on a periodic
-     sample" and beside another already reading "2" for tests past frequency.
-     Three components, one fact. The space now goes to the per-control view,
-     which is what an audit lead actually reads and what no other component on
-     the page was showing: every control, how it is tested, when it was last
-     tested, and what it found. */
   host.appendChild(grid);
 
   /* ---- Every control, one row each ---- */
   host.appendChild(html('div', { class: 'section-head' }, [
     html('p', { class: 'eyebrow', text: 'Controls' }),
     html('h2', { text: 'Control register' }),
-    html('p', { text: 'Every SOP step under test, with the evidence behind it. A continuous control is evaluated against the whole population on every load; a manual control carries the result of a periodic sample, and the sample size is stated because a small one cannot support a strong conclusion. A control that produced no result at all is called out rather than counted as passing.' }),
+    html('p', { text: 'Every SOP step under test, with the evidence behind it and the conclusion drawn from it. A continuous control is evaluated against the whole population on every load; a manual control carries the result of a periodic sample, and the sample size decides what that sample can support — at a 5% tolerance, 59 items are needed to conclude at 95% confidence, so a 20-item sample reads "insufficient evidence" however clean it comes back. A control that produced no result at all is called out rather than counted as passing.' }),
   ]));
-  const ctlRows = pc.rows.slice().sort((a, b) => {
-    const av = a.result.conformance, bv = b.result.conformance;
-    if (av === null && bv === null) return a.control.id.localeCompare(b.control.id);
-    if (av === null) return -1;
-    if (bv === null) return 1;
-    return av - bv;
-  });
+  const rank = { 'not-effective': 0, insufficient: 1, effective: 2 };
+  const ctlRows = pc.rows.slice().sort((a, b) =>
+    rank[a.conclusion.key] - rank[b.conclusion.key] || a.control.id.localeCompare(b.control.id));
   host.appendChild(sortableTable({
     rows: ctlRows, caption: 'Control register',
-    initial: { key: 'conf', dir: 'asc' },
+    initial: { key: 'concl', dir: 'asc' },
     columns: [
       { key: 'id', label: 'Control', sort: (r) => r.control.id, cell: (r) => r.control.id },
       { key: 'sop', label: 'Procedure', sort: (r) => r.control.sop, cell: (r) => `${r.control.sop} — ${r.control.sopTitle}`, wrap: true },
       { key: 'method', label: 'Method', sort: (r) => r.control.method, cell: (r) => r.control.method },
       { key: 'freq', label: 'Frequency', sort: (r) => r.control.frequency, cell: (r) => r.control.frequency },
       { key: 'tested', label: 'Examined', num: true, sort: (r) => r.result.tested, cell: (r) => (r.result.unresolved ? '—' : `${fmtInt(r.result.tested)} ${r.result.unit}`) },
+      { key: 'tdr', label: 'Tolerance', num: true, sort: (r) => r.control.tolerableDeviationRate, cell: (r) => (r.control.zeroTolerance ? 'Zero' : fmtPct(r.control.tolerableDeviationRate, 0)) },
       { key: 'conf', label: 'Conforming', num: true, sort: (r) => (r.result.conformance === null ? -1 : r.result.conformance), cell: (r) => (r.result.conformance === null ? '—' : fmtPct(r.result.conformance, 1)) },
+      { key: 'concl', label: 'Conclusion', sort: (r) => ({ 'not-effective': 0, insufficient: 1, effective: 2 }[r.conclusion.key]), cell: (r) => r.conclusion.label },
       { key: 'last', label: 'Last tested', sort: (r) => (r.result.lastTestedOn ? r.result.lastTestedOn.getTime() : 0), cell: (r) => (r.result.unresolved ? 'No result' : r.control.method === 'Automated' ? 'Continuous' : fmtDate(r.control.lastTestedOn)) },
       { key: 'capa', label: 'Open actions', num: true, sort: (r) => r.control.findings.filter((f) => openFindingAt(f, AS_OF)).length, cell: (r) => fmtInt(r.control.findings.filter((f) => openFindingAt(f, AS_OF)).length) },
     ],
@@ -5707,6 +6230,7 @@ function render() {
   const viewName = {
     posture: 'Posture', auth: 'Authorizations', class: 'Classification',
     pursuits: 'Pursuits and programs', anticorruption: 'Anti-corruption', process: 'Process compliance',
+    disclosures: 'Disclosures',
   }[STATE.view];
   document.getElementById('print-scope').textContent =
     `${viewName} · Program: ${STATE.program === 'all' ? 'All' : STATE.program}`
@@ -5723,6 +6247,7 @@ function render() {
   const panes = {
     posture: 'view-posture', auth: 'view-auth', class: 'view-class',
     pursuits: 'view-pursuits', anticorruption: 'view-anticorruption', process: 'view-process',
+    disclosures: 'view-disclosures',
   };
   for (const [key, id] of Object.entries(panes)) {
     const pane = document.getElementById(id);
@@ -5740,6 +6265,7 @@ function render() {
   else if (STATE.view === 'class') renderClassification(document.getElementById('view-class'), slice);
   else if (STATE.view === 'pursuits') renderPursuits(document.getElementById('view-pursuits'), slice);
   else if (STATE.view === 'anticorruption') renderAntiCorruption(document.getElementById('view-anticorruption'), slice);
+  else if (STATE.view === 'disclosures') renderDisclosures(document.getElementById('view-disclosures'), slice);
   else renderProcess(document.getElementById('view-process'), slice);
 
   if (priorFk) {
@@ -5799,6 +6325,21 @@ function selfCheck() {
       fail.push(`third party ${t.id} has an unresolved screening match but is outside the active population`);
     }
   }
+  /* A disclosure past its window must reach the queue. This is the module
+     where a missed clock has a named regulatory consequence, so it is the last
+     place a record should be able to sit quietly. */
+  for (const d of DATA.disclosures) {
+    if (disclosureOverdue(d, at) && !RULES.find((r) => r.key === 'disclosure-window').run(DATA, at).some((x) => x.subject === d.id)) {
+      fail.push(`disclosure ${d.id} is past its window but raises no action`);
+    }
+  }
+  /* Both regimes must be represented, or the two-clock model is undemonstrated
+     and the page silently claims a capability it never exercises. */
+  const vdRegimes = new Set(DATA.disclosures.map((d) => d.regime));
+  if (DATA.disclosures.length && vdRegimes.size < 2) {
+    fail.push('disclosure register covers only one regime; the ITAR and EAR clocks differ and both must be exercised');
+  }
+
   const livePursuitsWithBlockers = DATA.pursuits.filter((p) => isLivePursuit(p)
     && pursuitReadiness(p, DATA, at).blockers.length);
   const queuedPursuits = new Set(RULES.find((r) => r.key === 'pursuit-blocked').run(DATA, at).map((x) => x.subject));
@@ -5867,7 +6408,7 @@ function boot() {
   /* Tabs follow the ARIA tabs pattern: one tab stop for the whole set, with
      the arrow keys moving between them. Tabbing through three tabs to reach
      the content is not what a tablist is supposed to cost. */
-  const TAB_KEYS = ['posture', 'auth', 'class', 'pursuits', 'anticorruption', 'process'];
+  const TAB_KEYS = ['posture', 'auth', 'class', 'pursuits', 'anticorruption', 'process', 'disclosures'];
   const selectTab = (key, focus) => {
     if (STATE.view !== key) { STATE.view = key; STATE.focus = null; render(); }
     if (focus) document.getElementById(`tab-${key}`).focus();
